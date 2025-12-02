@@ -234,32 +234,180 @@ def sync_inventory():
 
 @shared_task
 def sync_flavors():
+    """
+    Collects Flavor definitions from all clusters.
+    """
+    print(">>> STARTING FLAVOR SYNC")
     for cluster in Cluster.objects.all():
         try:
+            print(f"  [{cluster.name}] Syncing flavors...")
             client = OpenStackClient(cluster)
             flavors = client.get_flavors()
+            count = 0
             for f in flavors:
-                Flavor.objects.update_or_create(uuid=f.id, cluster=cluster, defaults={'name': f.name, 'vcpus': f.vcpus, 'ram_mb': f.ram, 'disk_gb': f.disk, 'is_public': f.is_public})
-        except Exception: pass
+                Flavor.objects.update_or_create(
+                    uuid=f.id,
+                    cluster=cluster,
+                    defaults={
+                        'name': f.name,
+                        'vcpus': f.vcpus,
+                        'ram_mb': f.ram,
+                        'disk_gb': f.disk,
+                        'is_public': f.is_public
+                    }
+                )
+                count += 1
+            print(f"  [{cluster.name}] Synced {count} flavors.")
+            AuditLog.objects.create(
+                action="Flavor Sync Success",
+                target=cluster.name,
+                details=f"Synced {count} flavors."
+            )
+        except Exception as e:
+            print(f"  [{cluster.name}] Flavor sync error: {e}")
+            AuditLog.objects.create(
+                action="Flavor Sync Failed",
+                target=cluster.name,
+                details=str(e)
+            )
 
 @shared_task
 def sync_openmanage():
-    settings = PortalSettings.get_settings()
-    if not settings.ome_url: return
+    """
+    Connects to Dell OpenManage Enterprise (OME) to fetch hardware inventory and alerts.
+    """
+    # Using 'portal_settings' to avoid shadowing global 'settings'
+    portal_settings = PortalSettings.get_settings()
+    
+    if not portal_settings.ome_url or not portal_settings.ome_username:
+        print("OME Sync Skipped: No URL/Username configured.")
+        return
+
+    base_url = portal_settings.ome_url.rstrip('/')
+    auth = HTTPBasicAuth(portal_settings.ome_username, portal_settings.ome_password)
+    
+    print(f"Connecting to OME: {base_url}")
+    
     try:
-        base_url = settings.ome_url.rstrip('/')
-        auth = HTTPBasicAuth(settings.ome_username, settings.ome_password)
+        # 1. Fetch Devices
         resp = requests.get(f"{base_url}/api/DeviceService/Devices", auth=auth, verify=False, timeout=30)
         if resp.status_code == 200:
             devices = resp.json().get('value', [])
+            synced_count = 0
+            
             for device in devices:
-                # Match logic...
-                pass
-    except Exception: pass
+                # Try matching by Management IP (iDRAC IP)
+                mgmt_ip = None
+                if device.get('DeviceManagement'):
+                     mgmt_ip = device.get('DeviceManagement')[0].get('NetworkAddress')
+                
+                host = None
+                if mgmt_ip:
+                    host = PhysicalHost.objects.filter(idrac_ip=mgmt_ip).first()
+                
+                if not host:
+                    # Fallback: match by hostname if it matches OME DeviceName
+                    host = PhysicalHost.objects.filter(hostname__iexact=device.get('DeviceName')).first()
+                
+                if host:
+                    # Update Hardware Info
+                    host.service_tag = device.get('DeviceServiceTag', '')
+                    # OME 'Model' often contains the server model name
+                    host.cpu_model = device.get('Model', '') 
+                    
+                    # Status mapping (Simplified)
+                    # OME Status: 1000=OK, 3000=Critical, 2000=Warning
+                    health_status = str(device.get('Status', 'Unknown'))
+                    if '1000' in health_status: 
+                        host.hardware_health = 'OK'
+                    elif '3000' in health_status: 
+                        host.hardware_health = 'Critical'
+                    else: 
+                        host.hardware_health = 'Warning'
+                    
+                    host.save()
+                    synced_count += 1
+            
+            print(f"OME Sync: Updated {synced_count} hosts.")
+            AuditLog.objects.create(action="OME Sync Success", target="OpenManage", details=f"Updated {synced_count} hosts from OME.")
+
+        # 2. Fetch Active Alerts
+        alert_resp = requests.get(f"{base_url}/api/AlertService/Alerts?$filter=SeverityType ne 'Normal'", auth=auth, verify=False, timeout=30)
+        if alert_resp.status_code == 200:
+            alerts = alert_resp.json().get('value', [])
+            for alert in alerts:
+                src_ip = alert.get('MachineAddress')
+                host = PhysicalHost.objects.filter(idrac_ip=src_ip).first()
+                
+                if host:
+                    Alert.objects.get_or_create(
+                        target_host=host,
+                        title=alert.get('MessageId', 'OME Alert'),
+                        defaults={
+                            'source': 'OpenManage',
+                            'description': alert.get('Message', 'Hardware Alert'),
+                            'severity': 'critical' if 'Critical' in str(alert.get('SeverityType')) else 'warning',
+                            'is_active': True
+                        }
+                    )
+
+    except Exception as e:
+        print(f"OpenManage Sync Failed: {e}")
+        AuditLog.objects.create(action="OME Sync Failed", target="OpenManage", details=str(e))
 
 @shared_task
 def collect_hardware_health():
+    """
+    Connects to physical hosts via Redfish (iDRAC) to check actual hardware health.
+    Fallback if OME is not used.
+    """
     hosts = PhysicalHost.objects.exclude(idrac_ip__isnull=True).exclude(idrac_ip__exact='')
+    print(f"Starting Redfish hardware poll for {hosts.count()} hosts.")
+
+    for host in hosts:
+        redfish_client = None
+        try:
+            redfish_client = redfish.redfish_client(
+                base_url=f"https://{host.idrac_ip}",
+                username=IDRAC_DEFAULT_USER,
+                password=IDRAC_DEFAULT_PASSWORD,
+                default_prefix='/redfish/v1',
+                timeout=10
+            )
+            redfish_client.login(auth="session")
+
+            # Check System Health
+            sys_resp = redfish_client.get("/redfish/v1/Systems/System.Embedded.1")
+            if sys_resp.status != 200:
+                sys_resp = redfish_client.get("/redfish/v1/Systems/1")
+            
+            if sys_resp.status == 200:
+                health = sys_resp.dict.get('Status', {}).get('Health', 'Unknown')
+                if health in ['Warning', 'Critical']:
+                    print(f"  [{host.hostname}] Health Issue: {health}")
+                    Alert.objects.get_or_create(
+                        target_host=host,
+                        title=f"System Health: {health}",
+                        defaults={
+                            'source': "Redfish",
+                            'description': f"Global system status reported as {health}",
+                            'severity': 'critical' if health == 'Critical' else 'warning',
+                            'is_active': True
+                        }
+                    )
+                    # Log the issue finding
+                    AuditLog.objects.create(
+                        action="Hardware Issue Detected",
+                        target=host.hostname,
+                        details=f"Redfish reported health: {health}"
+                    )
+
+        except Exception as e:
+            pass
+            
+        finally:
+            if redfish_client:
+                redfish_client.logout()
     for host in hosts:
         # Redfish logic...
         pass
