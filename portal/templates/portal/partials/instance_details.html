@@ -1,0 +1,220 @@
+<div class="animate-fade-in-up">
+    <!-- Breadcrumb / Back Navigation -->
+    <div class="mb-4 flex items-center text-sm text-gray-400">
+        <span class="cursor-pointer hover:text-white" 
+              hx-get="{% url 'node_details' instance.host.id %}" 
+              hx-target="#main-stage"
+              hx-push-url="true">
+            {{ instance.host.hostname }}
+        </span>
+        <i class="ph ph-caret-right mx-2"></i>
+        <span class="text-white font-semibold">{{ instance.name }}</span>
+    </div>
+
+    <!-- Header -->
+    <div class="flex justify-between items-start mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-white flex items-center gap-3">
+                <i class="ph ph-cube text-blue-500"></i> {{ instance.name }}
+            </h1>
+            <p class="text-gray-400 mt-1">UUID: {{ instance.uuid }}</p>
+        </div>
+        <div class="flex gap-3">
+            <button hx-get="{% url 'instance_details' instance.uuid %}?refresh=true" 
+                    hx-target="#main-stage"
+                    class="bg-gray-800 hover:bg-gray-700 border border-gray-600 text-gray-200 px-3 py-2 rounded flex items-center gap-2 transition-colors">
+                <i class="ph ph-arrows-clockwise"></i> Refresh
+            </button>
+            
+            <!-- Standard VNC -->
+            <button onclick="openConsole('{{ instance.uuid }}', 'novnc')" class="bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white px-4 py-2 rounded flex items-center gap-2 transition-colors">
+                <i class="ph ph-terminal-window"></i> VNC
+            </button>
+            
+            <!-- SPICE Console -->
+            <button onclick="openConsole('{{ instance.uuid }}', 'spice')" class="bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white px-4 py-2 rounded flex items-center gap-2 transition-colors">
+                <i class="ph ph-monitor"></i> SPICE
+            </button>
+
+            <button class="bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white px-4 py-2 rounded flex items-center gap-2 transition-colors">
+                <i class="ph ph-camera"></i> Snapshot
+            </button>
+            <button class="bg-red-900 hover:bg-red-800 border border-red-800 text-red-100 px-4 py-2 rounded flex items-center gap-2 transition-colors">
+                <i class="ph ph-power"></i> Power Off
+            </button>
+        </div>
+    </div>
+
+    <!-- Status Badge -->
+    <div class="mb-8">
+        {% if instance.status == 'ACTIVE' %}
+            <div class="inline-flex items-center gap-2 px-3 py-1 bg-green-900/50 border border-green-700 text-green-300 rounded-full text-sm">
+                <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div> Active / Running
+            </div>
+        {% else %}
+            <div class="inline-flex items-center gap-2 px-3 py-1 bg-red-900/50 border border-red-700 text-red-300 rounded-full text-sm">
+                <div class="w-2 h-2 bg-red-400 rounded-full"></div> {{ instance.status }}
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Details Grid -->
+    <div class="grid grid-cols-2 gap-6 mb-8">
+        <!-- Specs -->
+        <div class="bg-gray-800 rounded-lg p-5 border border-gray-700">
+            <h3 class="text-lg font-semibold mb-4 text-white border-b border-gray-700 pb-2">Specifications</h3>
+            <div class="space-y-3">
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Flavor</span>
+                    <span class="text-white">{{ instance.flavor_name }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Image</span>
+                    <span class="text-white truncate w-64 text-right" title="{{ instance.image_name }}">{{ instance.image_name }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Key Pair</span>
+                    <span class="text-white">{{ instance.key_name }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Launched At</span>
+                    <span class="text-white">{{ instance.launched_at|default:"-" }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Host Node</span>
+                    <span class="text-blue-400 hover:underline cursor-pointer" 
+                          hx-get="{% url 'node_details' instance.host.id %}" 
+                          hx-target="#main-stage">
+                        {{ instance.host.hostname }}
+                    </span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Hypervisor IP</span>
+                    <span class="text-mono text-gray-300 text-sm">{{ instance.host.ip_address }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Hypervisor Version</span>
+                    <span class="text-white">KVM {{ instance.host.kvm_version|default:"-" }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Network & Metrics -->
+        <div class="space-y-6">
+            <div class="bg-gray-800 rounded-lg p-5 border border-gray-700">
+                <h3 class="text-lg font-semibold mb-4 text-white border-b border-gray-700 pb-2">Network</h3>
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">IP Address</span>
+                        <span class="text-white font-mono bg-gray-900 px-2 py-0.5 rounded">{{ instance.ip_address|default:"N/A" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">MAC Address</span>
+                        <span class="text-gray-300 font-mono">{{ instance.mac_address|default:"N/A" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Network Name</span>
+                        <span class="text-blue-400">{{ instance.network_name }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-5 border border-gray-700">
+                <h3 class="text-lg font-semibold mb-4 text-white border-b border-gray-700 pb-2">Live Metrics</h3>
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm text-gray-400">CPU Usage</span>
+                            <span class="text-sm text-white">{{ instance.last_cpu_usage_pct|stringformat:".1f" }}%</span>
+                        </div>
+                        <div class="w-full bg-gray-700 rounded-full h-2">
+                            <div class="bg-blue-500 h-2 rounded-full" style="width: {{ instance.last_cpu_usage_pct|stringformat:'.0f' }}%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm text-gray-400">RAM Usage</span>
+                            <span class="text-sm text-white">{{ instance.last_ram_usage_mb|stringformat:".0f" }} MB</span>
+                        </div>
+                        <div class="w-full bg-gray-700 rounded-full h-2">
+                            <div class="bg-purple-500 h-2 rounded-full" style="width: 40%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Storage / Volumes -->
+    <h3 class="font-bold text-lg mb-4 border-b border-gray-700 pb-2">Attached Storage</h3>
+    <div class="bg-gray-800 rounded border border-gray-700 overflow-hidden">
+        <table class="w-full text-left text-sm">
+            <thead class="bg-gray-700 text-xs uppercase text-gray-400">
+                <tr>
+                    <th class="p-3">Volume Name</th>
+                    <th class="p-3">Device</th>
+                    <th class="p-3">Size</th>
+                    <th class="p-3">Type</th>
+                    <th class="p-3">Status</th>
+                    <th class="p-3">UUID</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for vol in instance.volumes.all %}
+                <tr class="border-b border-gray-700 last:border-0">
+                    <td class="p-3 font-medium text-white flex items-center gap-2">
+                        <i class="ph ph-hard-drives text-orange-400"></i> {{ vol.name }}
+                    </td>
+                    <td class="p-3 font-mono text-gray-300">{{ vol.device }}</td>
+                    <td class="p-3 text-white">{{ vol.size_gb }} GB</td>
+                    <td class="p-3">
+                        {% if vol.is_bootable %}
+                            <span class="bg-blue-900/50 text-blue-300 text-xs px-2 py-0.5 rounded">Bootable</span>
+                        {% else %}
+                            <span class="text-gray-500 text-xs">Data</span>
+                        {% endif %}
+                    </td>
+                    <td class="p-3"><span class="text-green-400">In-use</span></td>
+                    <td class="p-3 font-mono text-gray-500 text-xs">{{ vol.uuid }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="p-4 text-center text-gray-500">No volumes attached.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Script to handle console opening -->
+    <script>
+        function openConsole(uuid, type) {
+            console.log(`Requesting ${type} console for ${uuid}`);
+            fetch(`/portal/console/${uuid}/?type=${type}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        alert("Error opening console: " + data.error);
+                        return;
+                    }
+
+                    if (!data.url) {
+                        alert("Error: OpenStack returned an empty console URL.");
+                        return;
+                    }
+                    
+                    console.log("Opening Console URL:", data.url);
+
+                    // Open URL in new window
+                    const win = window.open(data.url, 'Console', 'width=1024,height=768,resizable,scrollbars=yes,status=1');
+                    
+                    if (!win) {
+                        alert("Popup blocked! Please allow popups for this site.");
+                    }
+                    
+                    // If SPICE and token present, log or display
+                    if (type === 'spice' && data.token) {
+                        console.log("SPICE Token:", data.token);
+                    }
+                })
+                .catch(err => console.error("Console fetch error:", err));
+        }
+    </script>
+</div>

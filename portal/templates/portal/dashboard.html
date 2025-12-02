@@ -1,0 +1,216 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenStack Management Portal</title>
+    
+    <!-- Local Offline Assets -->
+    <script src="{% static 'portal/vendor/tailwindcss.js' %}"></script>
+    <script src="{% static 'portal/vendor/htmx.min.js' %}"></script>
+    <script src="{% static 'portal/vendor/phosphor.js' %}"></script>
+    
+    <link href="{% static 'portal/vendor/simple-datatables.css' %}" rel="stylesheet" type="text/css">
+    <script src="{% static 'portal/vendor/simple-datatables.js' %}" type="text/javascript"></script>
+
+    <style> 
+        .tree-line { border-left: 1px solid #475569; } 
+        .rotate-90 { transform: rotate(90deg); }
+        .htmx-indicator { display: none; }
+        .htmx-request .htmx-indicator { display: inline; }
+        .search-results::-webkit-scrollbar { width: 6px; }
+        .search-results::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+
+        /* Global DataTable Dark Mode Overrides */
+        .dataTable-wrapper.no-footer .dataTable-container { border-bottom: none; }
+        .dataTable-top, .dataTable-bottom { padding: 1rem; color: #9ca3af; }
+        
+        /* Fixed Input Styles */
+        .dataTable-input { 
+            background-color: #374151 !important; 
+            border: 1px solid #4b5563 !important; 
+            color: #e5e7eb !important; 
+            border-radius: 0.375rem !important; 
+            padding: 0.25rem 0.5rem !important;
+        }
+        
+        /* Fixed Selector (Dropdown) Styles */
+        .dataTable-selector { 
+            background-color: #374151 !important; 
+            border: 1px solid #4b5563 !important; 
+            color: #e5e7eb !important; 
+            border-radius: 0.375rem !important;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
+            background-position: right 0.5rem center !important;
+            background-repeat: no-repeat !important;
+            background-size: 1.5em 1.5em !important;
+            padding-right: 2.5rem !important;
+            padding-left: 0.75rem !important;
+        }
+        
+        .dataTable-wrapper .dataTable-selector option {
+            background-color: #374151;
+            color: #e5e7eb;
+        }
+
+        .dataTable-pagination a { color: #9ca3af; }
+        .dataTable-pagination a:hover { background-color: #374151; color: white; }
+        .dataTable-pagination .active a { background-color: #3b82f6; color: white; cursor: default; }
+        .dataTable-table > thead > tr > th { vertical-align: bottom; text-align: left; border-bottom: 1px solid #4b5563; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans h-screen flex flex-col overflow-hidden">
+    <header class="bg-gray-800 border-b border-gray-700 h-14 flex items-center justify-between px-4 relative z-50">
+        <div class="flex items-center gap-8">
+            <a href="{% url 'dashboard' %}" 
+               hx-get="{% url 'dashboard' %}" hx-target="#main-stage" hx-push-url="true"
+               class="flex items-center gap-2 hover:opacity-80 transition cursor-pointer">
+                <i class="ph ph-cloud text-blue-400 text-2xl"></i>
+                <span class="font-bold text-lg tracking-wide">OpenStack<span class="text-blue-400">Portal</span></span>
+                
+                <!-- Version & Beta Indicators -->
+                <div class="flex items-center gap-2 ml-2">
+                    <span class="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full font-mono">{{ app_version }}</span>
+                    <span class="text-[10px] font-bold bg-blue-900/50 text-blue-300 px-1.5 py-0.5 rounded uppercase border border-blue-800">Beta</span>
+                </div>
+            </a>
+
+            <!-- Navigation Menu -->
+            <!-- ID added for JS targeting -->
+            <nav class="flex gap-1 bg-gray-700/50 p-1 rounded-lg" id="main-nav">
+                <a href="{% url 'dashboard' %}" 
+                   hx-get="{% url 'dashboard' %}" hx-target="#main-stage" hx-push-url="true"
+                   class="px-3 py-1 text-sm rounded-md transition-colors nav-item {% if page_type == 'overview' %}bg-gray-600 text-white shadow-sm{% else %}text-gray-400 hover:text-white hover:bg-gray-700{% endif %}">
+                    Dashboard
+                </a>
+                <a href="{% url 'logs' %}" 
+                   hx-get="{% url 'logs' %}" hx-target="#main-stage" hx-push-url="true"
+                   class="px-3 py-1 text-sm rounded-md transition-colors nav-item {% if page_type == 'logs' %}bg-gray-600 text-white shadow-sm{% else %}text-gray-400 hover:text-white hover:bg-gray-700{% endif %}">
+                    Logs
+                </a>
+                {% if user.is_superuser %}
+                <a href="{% url 'admin_settings' %}" 
+                   hx-get="{% url 'admin_settings' %}" hx-target="#main-stage" hx-push-url="true"
+                   class="px-3 py-1 text-sm rounded-md transition-colors nav-item {% if page_type == 'admin' %}bg-gray-600 text-white shadow-sm{% else %}text-gray-400 hover:text-white hover:bg-gray-700{% endif %}">
+                    Admin
+                </a>
+                {% endif %}
+                <a href="{% url 'about' %}" 
+                   hx-get="{% url 'about' %}" hx-target="#main-stage" hx-push-url="true"
+                   class="px-3 py-1 text-sm rounded-md transition-colors nav-item {% if page_type == 'about' %}bg-gray-600 text-white shadow-sm{% else %}text-gray-400 hover:text-white hover:bg-gray-700{% endif %}">
+                    About
+                </a>
+            </nav>
+        </div>
+        
+        <div class="relative w-96 group">
+            <div class="flex items-center bg-gray-700 rounded px-3 py-1 focus-within:ring-1 focus-within:ring-blue-500">
+                <i class="ph ph-magnifying-glass text-gray-400 mr-2"></i>
+                <input type="text" name="q" class="bg-transparent border-none text-sm text-white w-full focus:outline-none" placeholder="Search Host, UUID, IP..." autocomplete="off" hx-get="{% url 'global_search' %}" hx-trigger="keyup changed delay:300ms, search" hx-target="#search-results-dropdown">
+                <i class="ph ph-spinner animate-spin text-blue-400 htmx-indicator ml-2"></i>
+            </div>
+            <div id="search-results-dropdown" class="absolute top-full left-0 w-full mt-1 bg-gray-800 border border-gray-600 rounded shadow-xl overflow-hidden hidden empty:hidden"></div>
+        </div>
+
+        <div class="flex items-center gap-4 text-sm">
+            <span>{{ request.user.username }}</span>
+            <form action="{% url 'logout' %}" method="post" class="inline">{% csrf_token %}<button type="submit" class="text-red-400 ml-2 hover:text-red-300">Logout</button></form>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        <aside class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col overflow-y-auto select-none">
+            <div class="p-3 text-xs font-semibold text-gray-400 uppercase tracking-wider sticky top-0 bg-gray-800 z-10">Global Views</div>
+            <div class="px-2 mb-4 space-y-1">
+                <div class="flex items-center gap-2 p-2 hover:bg-gray-700 rounded cursor-pointer text-gray-300 transition-colors" hx-get="{% url 'all_instances' %}" hx-target="#main-stage" hx-push-url="true"><i class="ph ph-stack text-lg"></i><span class="text-sm">All Instances</span></div>
+                <div class="flex items-center gap-2 p-2 hover:bg-gray-700 rounded cursor-pointer text-gray-300 transition-colors" hx-get="{% url 'all_nodes' %}" hx-target="#main-stage" hx-push-url="true"><i class="ph ph-hard-drives text-lg"></i><span class="text-sm">All Nodes</span></div>
+                <div class="flex items-center gap-2 p-2 hover:bg-gray-700 rounded cursor-pointer text-gray-300 transition-colors" hx-get="{% url 'all_flavors' %}" hx-target="#main-stage" hx-push-url="true"><i class="ph ph-circles-four text-lg"></i><span class="text-sm">All Flavors</span></div>
+            </div>
+            <div class="p-3 text-xs font-semibold text-gray-400 uppercase tracking-wider sticky top-0 bg-gray-800 z-10 border-t border-gray-700">Inventory</div>
+            <div class="px-2">
+                {% regroup clusters by region_name as region_list %}
+                {% for region in region_list %}
+                <div class="mb-4">
+                    <div class="px-2 py-1 text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1"><i class="ph ph-map-pin"></i> {{ region.grouper }}</div>
+                    {% for cluster in region.list %}
+                    <div class="mb-1 pl-1">
+                        <div class="flex items-center gap-1 p-2 hover:bg-gray-700 rounded cursor-pointer transition-colors group">
+                            <div onclick="toggleCluster('{{ cluster.id }}')" class="p-1 hover:text-white text-gray-400"><i id="arrow-cluster-{{ cluster.id }}" class="ph ph-caret-right text-xs transition-transform duration-200"></i></div>
+                            <div class="flex-1 flex items-center gap-2 text-blue-300 group-hover:text-blue-200" hx-get="{% url 'cluster_details' cluster.id %}" hx-target="#main-stage" hx-push-url="true">
+                                <i class="ph ph-globe"></i>
+                                <span class="font-medium text-sm">{{ cluster.name }}</span>
+                                {% if cluster.has_active_alert %}
+                                    <i class="ph ph-warning-circle text-red-500 animate-pulse ml-auto mr-1" title="Cluster Alert"></i>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div id="cluster-{{ cluster.id }}" class="ml-4 pl-2 tree-line hidden">
+                            {% for host in cluster.hosts.all %}
+                            <div class="mt-1">
+                                <div class="flex items-center gap-2 p-1 hover:bg-gray-700 rounded cursor-pointer text-gray-300 transition-colors" hx-get="{% url 'node_details' host.id %}" hx-target="#main-stage" hx-push-url="true">
+                                    <i class="ph ph-desktop {% if host.state == 'up' %}text-green-400{% else %}text-red-400{% endif %}"></i>
+                                    <span class="text-xs truncate flex-1">{{ host.hostname }}</span>
+                                    {% if host.has_active_alert %}
+                                        <i class="ph ph-warning text-yellow-500 ml-auto mr-1 text-xs" title="Host Alert"></i>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+        </aside>
+        
+        <!-- Global polling every 60s -->
+        <main id="main-stage" class="flex-1 bg-gray-900 p-6 overflow-y-auto relative" hx-get="." hx-trigger="every 60s">
+            {% if page_type == 'overview' %}{% include 'portal/partials/global_overview.html' %}{% elif page_type == 'cluster' %}{% include 'portal/partials/cluster_details.html' %}{% elif page_type == 'node' %}{% include 'portal/partials/node_details.html' %}{% elif page_type == 'instance' %}{% include 'portal/partials/instance_details.html' %}{% elif page_type == 'all_instances' %}{% include 'portal/partials/all_instances.html' %}{% elif page_type == 'all_nodes' %}{% include 'portal/partials/all_nodes.html' %}{% elif page_type == 'all_flavors' %}{% include 'portal/partials/all_flavors.html' %}{% elif page_type == 'logs' %}{% include 'portal/partials/logs.html' %}{% elif page_type == 'about' %}{% include 'portal/partials/about.html' %}{% elif page_type == 'admin' %}{% include 'portal/partials/admin_settings.html' %}{% elif page_type == 'cost' %}{% include 'portal/partials/cost_dashboard.html' %}{% endif %}
+        </main>
+    </div>
+    
+    <script>
+        function toggleCluster(id) {
+            const list = document.getElementById(`cluster-${id}`);
+            const arrow = document.getElementById(`arrow-cluster-${id}`);
+            if (list.classList.contains('hidden')) { list.classList.remove('hidden'); arrow.classList.add('rotate-90'); } 
+            else { list.classList.add('hidden'); arrow.classList.remove('rotate-90'); }
+        }
+        function openConsole(uuid) { fetch(`/portal/console/${uuid}/`).then(r => r.json()).then(data => { window.open(data.url, 'Console', 'width=800,height=600'); }); }
+        
+        // Search Dropdown Close
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('search-results-dropdown');
+            const searchInput = document.querySelector('input[name="q"]');
+            if (dropdown && !dropdown.contains(event.target) && event.target !== searchInput) { dropdown.innerHTML = ''; dropdown.classList.add('hidden'); }
+        });
+
+        // --- Active Menu Highlighter ---
+        function updateActiveMenu() {
+            const currentPath = window.location.pathname;
+            const links = document.querySelectorAll('#main-nav a');
+            
+            links.forEach(link => {
+                const href = link.getAttribute('href');
+                // Simple check: exact match or starts with (if needed)
+                if (currentPath === href) {
+                    link.className = "px-3 py-1 text-sm rounded-md transition-colors bg-gray-600 text-white shadow-sm";
+                } else {
+                    link.className = "px-3 py-1 text-sm rounded-md transition-colors text-gray-400 hover:text-white hover:bg-gray-700";
+                }
+            });
+        }
+
+        // Trigger on page load and after every HTMX history update
+        document.addEventListener('DOMContentLoaded', updateActiveMenu);
+        document.body.addEventListener('htmx:pushedIntoHistory', updateActiveMenu);
+        // Fallback for direct clicks that don't push history but change content
+        document.body.addEventListener('htmx:afterOnLoad', updateActiveMenu);
+    </script>
+</body>
+</html>

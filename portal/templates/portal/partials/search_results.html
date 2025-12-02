@@ -1,0 +1,71 @@
+{% if has_results %}
+<div class="search-results max-h-96 overflow-y-auto block">
+    
+    <!-- Clusters -->
+    {% if clusters %}
+    <div class="px-3 py-2 text-xs font-bold text-gray-500 uppercase bg-gray-900 border-b border-gray-700 sticky top-0">Clusters</div>
+    {% for cluster in clusters %}
+    <div class="px-4 py-2 hover:bg-gray-700 cursor-not-allowed flex items-center gap-3 border-b border-gray-700/50 text-gray-400">
+        <div class="bg-blue-900/30 p-1.5 rounded"><i class="ph ph-globe text-blue-400"></i></div>
+        <div>
+            <div class="text-sm font-medium">{{ cluster.name }}</div>
+            <div class="text-xs text-gray-500">{{ cluster.region_name }}</div>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <!-- Hosts -->
+    {% if hosts %}
+    <div class="px-3 py-2 text-xs font-bold text-gray-500 uppercase bg-gray-900 border-b border-gray-700 sticky top-0">Hosts</div>
+    {% for host in hosts %}
+    <div hx-get="{% url 'node_details' host.id %}" 
+         hx-target="#main-stage"
+         hx-push-url="true"
+         onclick="document.getElementById('search-results-dropdown').classList.add('hidden')"
+         class="px-4 py-2 hover:bg-gray-700 cursor-pointer flex items-center gap-3 border-b border-gray-700/50 transition-colors">
+        <div class="bg-green-900/30 p-1.5 rounded"><i class="ph ph-hard-drives text-green-400"></i></div>
+        <div>
+            <div class="text-sm font-medium text-white">{{ host.hostname }}</div>
+            <div class="text-xs text-gray-400">{{ host.ip_address }}</div>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <!-- Instances -->
+    {% if instances %}
+    <div class="px-3 py-2 text-xs font-bold text-gray-500 uppercase bg-gray-900 border-b border-gray-700 sticky top-0">Instances</div>
+    {% for instance in instances %}
+    <div hx-get="{% url 'instance_details' instance.uuid %}" 
+         hx-target="#main-stage"
+         hx-push-url="true"
+         onclick="document.getElementById('search-results-dropdown').classList.add('hidden')"
+         class="px-4 py-2 hover:bg-gray-700 cursor-pointer flex items-center gap-3 border-b border-gray-700/50 transition-colors">
+        <div class="bg-purple-900/30 p-1.5 rounded"><i class="ph ph-cube text-purple-400"></i></div>
+        <div>
+            <div class="text-sm font-medium text-white">{{ instance.name }}</div>
+            <div class="text-xs text-gray-400 truncate w-64">UUID: {{ instance.uuid }}</div>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+</div>
+<script>
+    document.getElementById('search-results-dropdown').classList.remove('hidden');
+</script>
+{% else %}
+    {% if query %}
+    <div class="p-4 text-center text-sm text-gray-500 block">
+        No results found for "{{ query }}"
+    </div>
+    <script>
+        document.getElementById('search-results-dropdown').classList.remove('hidden');
+    </script>
+    {% else %}
+    <script>
+        document.getElementById('search-results-dropdown').classList.add('hidden');
+    </script>
+    {% endif %}
+{% endif %}

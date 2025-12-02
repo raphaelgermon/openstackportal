@@ -1,0 +1,162 @@
+<div class="animate-fade-in-up">
+    <!-- Header -->
+    <div class="flex justify-between items-start mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+                <i class="ph ph-hard-drives"></i> {{ host.hostname }}
+            </h1>
+            <p class="text-gray-400 text-sm mt-1">IP: {{ host.ip_address }} | Serial: {{ host.serial_number|default:"-" }}</p>
+        </div>
+        <div class="flex gap-2">
+            <button hx-get="{% url 'node_details' host.id %}?refresh=true" 
+                    hx-target="#main-stage"
+                    class="bg-gray-800 hover:bg-gray-700 border border-gray-600 text-gray-200 px-3 py-2 rounded text-sm font-medium transition flex items-center gap-2">
+                <i class="ph ph-arrows-clockwise"></i> Refresh
+            </button>
+
+            {% if host.is_maintenance %}
+                <button hx-post="{% url 'toggle_maintenance' host.id %}" 
+                        hx-target="#main-stage"
+                        class="bg-red-600 hover:bg-red-500 px-4 py-2 rounded text-sm font-medium transition text-white">
+                    <i class="ph ph-lock-key"></i> Exit Maintenance
+                </button>
+            {% else %}
+                <button onclick="openMaintModal()" 
+                        class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-sm font-medium transition text-white">
+                    <i class="ph ph-wrench"></i> Enter Maintenance
+                </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Alerts Section (Only visible if alerts exist) -->
+    {% if alerts %}
+    <div class="mb-6 bg-red-900/20 border border-red-800 rounded-lg p-4">
+        <h3 class="text-red-400 font-bold flex items-center gap-2 mb-2">
+            <i class="ph ph-warning-circle"></i> Active Alerts
+        </h3>
+        <div class="space-y-2">
+            {% for alert in alerts %}
+            <div class="flex items-start gap-2 text-sm">
+                <span class="text-red-300 font-semibold">{{ alert.title }}:</span>
+                <span class="text-gray-300">{{ alert.description }}</span>
+                <span class="text-gray-500 text-xs ml-auto">{{ alert.created_at|timesince }} ago</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Maintenance Modal (Hidden) -->
+    <div id="maintenance-modal" class="hidden fixed inset-0 z-[100] bg-black/70 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-gray-800 border border-gray-600 rounded-lg shadow-2xl w-[400px] p-6 transform transition-all scale-100">
+            <h3 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                <i class="ph ph-warning text-yellow-500"></i> Confirm Maintenance
+            </h3>
+            <p class="text-gray-400 text-sm mb-4">
+                This will evacuate all instances from <strong>{{ host.hostname }}</strong>. Please provide a reason for the audit log.
+            </p>
+            <form hx-post="{% url 'toggle_maintenance' host.id %}" hx-target="#main-stage">
+                {% csrf_token %}
+                <textarea name="reason" rows="3" class="w-full bg-gray-900 border border-gray-600 rounded p-2 text-sm text-white focus:outline-none focus:border-blue-500 mb-4" placeholder="e.g., RAM upgrade, Fan replacement..." required></textarea>
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="closeMaintModal()" class="px-3 py-2 text-sm text-gray-300 hover:text-white">Cancel</button>
+                    <button type="submit" class="bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded text-sm font-medium">Confirm & Evacuate</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Hardware Information (New) -->
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-5 mb-6">
+        <h3 class="text-lg font-semibold text-white mb-4 border-b border-gray-700 pb-2">Hardware Information</h3>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+            <div>
+                <span class="block text-gray-400 text-xs uppercase">Service Tag</span>
+                <span class="text-white font-mono">{{ host.service_tag|default:"N/A" }}</span>
+            </div>
+            <div>
+                <span class="block text-gray-400 text-xs uppercase">Model</span>
+                <span class="text-white">{{ host.cpu_model|default:"Unknown" }}</span>
+            </div>
+            <div>
+                <span class="block text-gray-400 text-xs uppercase">Hardware Health</span>
+                {% if host.hardware_health == 'OK' %}
+                    <span class="text-green-400 font-bold">Healthy</span>
+                {% elif host.hardware_health == 'Critical' %}
+                    <span class="text-red-400 font-bold">Critical</span>
+                {% else %}
+                    <span class="text-yellow-400 font-bold">{{ host.hardware_health }}</span>
+                {% endif %}
+            </div>
+            <div>
+                <span class="block text-gray-400 text-xs uppercase">iDRAC IP</span>
+                <a href="https://{{ host.idrac_ip }}" target="_blank" class="text-blue-400 hover:underline">{{ host.idrac_ip|default:"N/A" }}</a>
+            </div>
+            <div>
+                <span class="block text-gray-400 text-xs uppercase">BIOS Version</span>
+                <span class="text-white">{{ host.bios_version|default:"-" }}</span>
+            </div>
+            <div>
+                <span class="block text-gray-400 text-xs uppercase">Firmware (iDRAC)</span>
+                <span class="text-white">{{ host.idrac_version|default:"-" }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Capacity Bars -->
+    <div class="grid grid-cols-2 gap-6 mb-8">
+        <div class="bg-gray-800 p-4 rounded border border-gray-700">
+            <div class="flex justify-between mb-2">
+                <span class="text-sm font-medium text-gray-400">CPU Usage</span>
+                <span class="text-sm text-white">{{ host.vcpus_used }} / {{ host.cpu_count }} vCPUs</span>
+            </div>
+            <div class="w-full bg-gray-700 rounded-full h-2.5">
+                <div class="bg-blue-500 h-2.5 rounded-full" style="width: {% widthratio host.vcpus_used host.cpu_count 100 %}%"></div>
+            </div>
+        </div>
+        <div class="bg-gray-800 p-4 rounded border border-gray-700">
+            <div class="flex justify-between mb-2">
+                <span class="text-sm font-medium text-gray-400">RAM Usage</span>
+                <span class="text-sm text-white">{% widthratio host.memory_mb_used 1024 1 %} / {% widthratio host.memory_mb 1024 1 %} GB</span>
+            </div>
+            <div class="w-full bg-gray-700 rounded-full h-2.5">
+                <div class="bg-purple-500 h-2.5 rounded-full" style="width: {% widthratio host.memory_mb_used host.memory_mb 100 %}%"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instance List (Existing) -->
+    <h3 class="font-bold text-lg mb-4 border-b border-gray-700 pb-2">Running Instances</h3>
+    <div class="bg-gray-800 rounded border border-gray-700">
+        <table class="w-full text-left text-sm">
+            <thead class="bg-gray-700 text-xs uppercase text-gray-400">
+                <tr><th class="p-3">Name</th><th class="p-3">Status</th><th class="p-3">IP Address</th><th class="p-3">Flavor</th><th class="p-3">Actions</th></tr>
+            </thead>
+            <tbody>
+                {% for instance in host.instances.all %}
+                <tr class="border-b border-gray-700 last:border-0 hover:bg-gray-750 transition-colors cursor-pointer"
+                    hx-get="{% url 'instance_details' instance.uuid %}"
+                    hx-target="#main-stage"
+                    hx-push-url="true"
+                    title="Click for details">
+                    <td class="p-3 font-medium text-white flex items-center gap-2"><i class="ph ph-cube text-blue-400"></i> {{ instance.name }}</td>
+                    <td class="p-3">{% if instance.status == 'ACTIVE' %}<span class="text-green-400 flex items-center gap-1"><div class="w-2 h-2 bg-green-400 rounded-full"></div> Active</span>{% else %}<span class="text-red-400 flex items-center gap-1"><div class="w-2 h-2 bg-red-400 rounded-full"></div> {{ instance.status }}</span>{% endif %}</td>
+                    <td class="p-3 text-gray-300 font-mono text-xs">{{ instance.ip_address|default:"-" }}</td>
+                    <td class="p-3 text-gray-400">{{ instance.flavor_name }}</td>
+                    <td class="p-3 flex gap-2" onclick="event.stopPropagation()">
+                        <button onclick="openConsole('{{ instance.uuid }}', 'novnc')" class="bg-blue-900 text-blue-200 px-2 py-1 rounded text-xs hover:bg-blue-800 border border-blue-800">Console</button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="p-4 text-center text-gray-500">No instances running on this host.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        function openMaintModal() { document.getElementById('maintenance-modal').classList.remove('hidden'); }
+        function closeMaintModal() { document.getElementById('maintenance-modal').classList.add('hidden'); }
+    </script>
+</div>

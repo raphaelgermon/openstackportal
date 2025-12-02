@@ -1,0 +1,196 @@
+<div class="animate-fade-in-up p-4">
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-2xl font-bold text-white flex items-center gap-2 mb-6">
+            <i class="ph ph-gear text-blue-500"></i> Admin Settings
+        </h1>
+
+        <!-- Feedback Messages -->
+        {% if success %}
+        <div class="bg-green-900/50 border border-green-600 text-green-200 px-4 py-3 rounded mb-6 flex items-center gap-2">
+            <i class="ph ph-check-circle text-xl"></i> {{ success }}
+        </div>
+        {% endif %}
+        {% if error %}
+        <div class="bg-red-900/50 border border-red-600 text-red-200 px-4 py-3 rounded mb-6 flex items-center gap-2">
+            <i class="ph ph-warning-circle text-xl"></i> {{ error }}
+        </div>
+        {% endif %}
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            <!-- 1. Financial Settings -->
+            <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 h-fit">
+                <h2 class="text-lg font-semibold text-white mb-4 border-b border-gray-700 pb-2">Financial Configuration</h2>
+                
+                <!-- FORM 1: Global Rates (Isolated) -->
+                <form hx-post="{% url 'admin_settings' %}" hx-target="#main-stage" class="mb-6">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="save_cost_settings">
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-1">Electricity Cost ($/kWh)</label>
+                            <input type="number" step="0.0001" name="electricity_cost" value="{{ settings.electricity_cost }}" 
+                                   class="w-full bg-gray-900 text-white border border-gray-600 rounded px-3 py-2 focus:border-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-1">PUE</label>
+                            <input type="number" step="0.01" name="pue" value="{{ settings.pue }}" 
+                                   class="w-full bg-gray-900 text-white border border-gray-600 rounded px-3 py-2 focus:border-blue-500 outline-none">
+                        </div>
+                    </div>
+                    <div class="flex justify-end">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm transition-colors">Save Global Rates</button>
+                    </div>
+                </form>
+
+                <hr class="border-gray-700 mb-4">
+
+                <!-- List of Profiles -->
+                <h3 class="text-sm font-bold text-white mb-2">Server Cost Profiles</h3>
+                <div class="space-y-2 mb-4 max-h-40 overflow-y-auto">
+                    {% for profile in cost_profiles %}
+                    <div class="flex justify-between items-center bg-gray-700/50 p-2 rounded text-sm">
+                        <span>{{ profile.name }} (${{ profile.monthly_amortization }}/mo, {{ profile.average_watts }}W)</span>
+                        <!-- Delete Form (Isolated) -->
+                        <form hx-post="{% url 'admin_settings' %}" hx-target="#main-stage" class="inline" onsubmit="return confirm('Delete profile?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete_profile">
+                            <input type="hidden" name="profile_id" value="{{ profile.id }}">
+                            <button type="submit" class="text-red-400 hover:text-red-300"><i class="ph ph-trash"></i></button>
+                        </form>
+                    </div>
+                    {% empty %}
+                    <p class="text-gray-500 text-xs italic">No profiles defined.</p>
+                    {% endfor %}
+                </div>
+                
+                <!-- FORM 2: Add Profile (Isolated) -->
+                <form hx-post="{% url 'admin_settings' %}" hx-target="#main-stage" class="border-t border-gray-700 pt-4">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="add_profile">
+                    <div class="grid grid-cols-3 gap-2 mb-2">
+                         <input type="text" name="name" placeholder="Model (e.g. R740)" class="bg-gray-900 text-white border border-gray-600 rounded px-2 py-1 text-xs focus:border-green-500 outline-none" required>
+                         <input type="number" name="amortization" placeholder="Cost/Mo ($)" class="bg-gray-900 text-white border border-gray-600 rounded px-2 py-1 text-xs focus:border-green-500 outline-none" required>
+                         <input type="number" name="watts" placeholder="Watts" class="bg-gray-900 text-white border border-gray-600 rounded px-2 py-1 text-xs focus:border-green-500 outline-none" required>
+                    </div>
+                    <button type="submit" class="w-full bg-green-700 hover:bg-green-600 text-white text-xs py-1.5 rounded transition-colors">Add Profile</button>
+                </form>
+            </div>
+
+            <!-- 2. Global Settings & Cluster Mgmt -->
+            <div class="space-y-8">
+                <!-- Portal Configuration -->
+                <div class="bg-gray-800 border border-gray-700 rounded-lg p-6">
+                     <h2 class="text-lg font-semibold text-white mb-4 border-b border-gray-700 pb-2">Portal Configuration</h2>
+                    <form hx-post="{% url 'admin_settings' %}" hx-target="#main-stage">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="save_settings">
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm text-gray-400 mb-1">Inventory Sync Frequency (Minutes)</label>
+                                <input type="number" name="sync_interval" value="{{ settings.sync_interval_minutes }}" 
+                                       class="w-full bg-gray-700 text-white border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-blue-500">
+                                <p class="text-xs text-gray-500 mt-1">Requires service restart to apply change.</p>
+                            </div>
+
+                            <div class="pt-4 border-t border-gray-700">
+                                <h3 class="text-md font-semibold text-white mb-3 flex items-center gap-2"><i class="ph ph-desktop-tower"></i> OpenManage Integration</h3>
+                                <div class="grid grid-cols-1 gap-3">
+                                    <input type="url" name="ome_url" value="{{ settings.ome_url|default:'' }}" placeholder="https://ome.example.com"
+                                           class="w-full bg-gray-700 text-white border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-blue-500 text-sm">
+                                    <input type="text" name="ome_username" value="{{ settings.ome_username|default:'' }}" placeholder="Username"
+                                           class="w-full bg-gray-700 text-white border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-blue-500 text-sm">
+                                    <input type="password" name="ome_password" placeholder="Password (Leave blank to keep)"
+                                           class="w-full bg-gray-700 text-white border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-blue-500 text-sm">
+                                </div>
+                                <label class="inline-flex items-center cursor-pointer mt-2">
+                                    <input type="checkbox" name="test_ome" class="form-checkbox bg-gray-700 border-gray-600 rounded text-blue-500">
+                                    <span class="ml-2 text-sm text-gray-300">Test connection now</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 flex justify-end">
+                            <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded transition-colors text-sm">Save Settings</button>
+                        </div>
+                    </form>
+                </div>
+                
+                <!-- Cluster List -->
+                <div class="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
+                    <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+                        <h2 class="text-lg font-semibold text-white">Managed Clusters</h2>
+                        <span class="bg-blue-900 text-blue-200 text-xs px-2 py-1 rounded">{{ clusters.count }}</span>
+                    </div>
+                    <div class="max-h-64 overflow-y-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-gray-700/50 text-xs uppercase text-gray-400">
+                                <tr><th class="p-3">Name</th><th class="p-3">Region</th><th class="p-3 text-right">Action</th></tr>
+                            </thead>
+                            <tbody>
+                                {% for c in clusters %}
+                                <tr class="border-b border-gray-700 hover:bg-gray-750">
+                                    <td class="p-3 font-medium text-white">{{ c.name }}</td>
+                                    <td class="p-3 text-gray-400">{{ c.region_name }}</td>
+                                    <td class="p-3 text-right">
+                                        <form hx-post="{% url 'admin_settings' %}" hx-target="#main-stage" class="inline" onsubmit="return confirm('Delete cluster {{ c.name }}?');">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="delete_cluster">
+                                            <input type="hidden" name="cluster_id" value="{{ c.id }}">
+                                            <button type="submit" class="text-red-400 hover:text-red-300"><i class="ph ph-trash"></i></button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="3" class="p-4 text-center text-gray-500">No clusters configured.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Add Cluster Form -->
+                <div class="bg-gray-800 border border-gray-700 rounded-lg p-6">
+                    <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2"><i class="ph ph-plus-circle text-green-500"></i> Add New Cluster</h2>
+                    <form hx-post="{% url 'admin_settings' %}" hx-target="#main-stage">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="add_cluster">
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1">Friendly Name</label>
+                                <input type="text" name="name" required placeholder="e.g. Prod-US-East" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1">Region / AZ</label>
+                                <input type="text" name="region" required placeholder="e.g. AMER" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none">
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-xs text-gray-400 mb-1">Keystone Auth URL</label>
+                                <input type="url" name="auth_url" required placeholder="https://keystone.example.com:5000/v3" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1">Project Name</label>
+                                <input type="text" name="project" required placeholder="admin" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1">Username</label>
+                                <input type="text" name="username" required class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none">
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-xs text-gray-400 mb-1">Password</label>
+                                <input type="password" name="password" required class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none">
+                            </div>
+                        </div>
+                        <div class="flex justify-end">
+                            <button type="submit" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded text-sm flex items-center gap-2 transition">
+                                <i class="ph ph-check"></i> Add Cluster
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,101 @@
+{% load static %}
+<div class="animate-fade-in-up">
+    <div class="mb-6 border-b border-gray-700 pb-4 flex justify-between items-end">
+        <div>
+            <h1 class="text-3xl font-bold text-white flex items-center gap-3">
+                <i class="ph ph-circles-four text-purple-500"></i> Global Flavors Inventory
+            </h1>
+            <p class="text-gray-400 text-sm mt-1">
+                Compute templates available across all clusters.
+                {% if last_update %}
+                <span class="ml-2 text-xs text-gray-500"><i class="ph ph-clock"></i> Last Full Update: {{ last_update|date:"Y-m-d H:i" }}</span>
+                {% endif %}
+            </p>
+        </div>
+        <div class="flex gap-2 items-center">
+            <!-- Manual Refresh Button -->
+            <button hx-post="{% url 'refresh_flavors' %}" 
+                    hx-target="#main-stage"
+                    class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-2 rounded border border-gray-600 text-sm flex items-center gap-2 transition">
+                <i class="ph ph-arrows-clockwise"></i> Refresh Now
+            </button>
+            
+            <div class="bg-gray-800 px-4 py-2 rounded border border-gray-700 text-sm">
+                <span class="text-gray-400">Total Count:</span> 
+                <span class="text-white font-bold ml-1">{{ flavors.count }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-gray-800 rounded border border-gray-700 overflow-hidden p-2">
+        <div class="overflow-x-auto">
+            <table id="all-flavors-table" class="w-full text-left text-sm">
+                <thead class="bg-gray-700 text-xs uppercase text-gray-400">
+                    <tr>
+                        <th class="p-3">Name</th>
+                        <th class="p-3">Cluster</th>
+                        <th class="p-3">vCPUs</th>
+                        <th class="p-3">RAM (MB)</th>
+                        <th class="p-3">Disk (GB)</th>
+                        <th class="p-3">Visibility</th>
+                        <th class="p-3">ID</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for flavor in flavors %}
+                    <tr class="border-b border-gray-700 last:border-0 hover:bg-gray-750 transition-colors">
+                        <td class="p-3 font-medium text-white">{{ flavor.name }}</td>
+                        <td class="p-3 text-blue-300">{{ flavor.cluster.name }}</td>
+                        <td class="p-3 text-gray-300">{{ flavor.vcpus }}</td>
+                        <td class="p-3 text-gray-300">{{ flavor.ram_mb }}</td>
+                        <td class="p-3 text-gray-300">{{ flavor.disk_gb }}</td>
+                        <td class="p-3">
+                            {% if flavor.is_public %}
+                                <span class="text-green-400 text-xs bg-green-900/30 px-2 py-0.5 rounded">Public</span>
+                            {% else %}
+                                <span class="text-yellow-400 text-xs bg-yellow-900/30 px-2 py-0.5 rounded">Private</span>
+                            {% endif %}
+                        </td>
+                        <td class="p-3 text-gray-500 font-mono text-xs truncate max-w-[150px]" title="{{ flavor.uuid }}">
+                            {{ flavor.uuid }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const initFlavorTable = () => {
+                var tableElement = document.querySelector("#all-flavors-table");
+                if (tableElement && typeof simpleDatatables !== 'undefined') {
+                    if (!tableElement.classList.contains('dataTable-table')) {
+                        new simpleDatatables.DataTable(tableElement, {
+                            perPage: 15,
+                            perPageSelect: [15, 50, 100, "All"],
+                            fixedHeight: false,
+                            labels: {
+                                placeholder: "Search flavors...",
+                                perPage: "entries per page",
+                                noRows: "No flavors found",
+                                info: "Showing {start} to {end} of {rows} entries",
+                            }
+                        });
+                    }
+                }
+            };
+
+            if (typeof simpleDatatables === 'undefined') {
+                const script = document.createElement('script');
+                script.src = "{% static 'portal/vendor/simple-datatables.js' %}"; // Use local static if possible
+                script.onload = initFlavorTable;
+                document.head.appendChild(script);
+            } else {
+                initFlavorTable();
+            }
+        })();
+    </script>
+</div>

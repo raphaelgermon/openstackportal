@@ -1,0 +1,35 @@
+Environments
+
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+Python
+
+pycache/
+*.py[cod]
+*$py.class
+
+Database
+
+db.sqlite3
+db.sqlite3-journal
+
+Media and Static
+
+staticfiles/
+media/
+
+Logs
+
+*.log
+
+OS specific
+
+.DS_Store
+
+clusters.yaml

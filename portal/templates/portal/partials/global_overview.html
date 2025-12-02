@@ -1,0 +1,130 @@
+<div class="animate-fade-in-up">
+    <h1 class="text-2xl font-bold mb-6">Global Overview</h1>
+    
+    <div class="grid grid-cols-4 gap-4 mb-8">
+        <div class="bg-gray-800 p-4 rounded border border-gray-700">
+            <div class="text-gray-400 text-xs uppercase">Total Instances</div>
+            <div class="text-3xl font-bold text-white">{{ total_vms }}</div>
+        </div>
+        <div class="bg-gray-800 p-4 rounded border border-gray-700">
+            <div class="text-gray-400 text-xs uppercase">Total Cores</div>
+            <div class="text-3xl font-bold text-blue-400">{{ total_cores }}</div>
+        </div>
+        <div class="bg-gray-800 p-4 rounded border border-gray-700">
+            <div class="text-gray-400 text-xs uppercase">Regions</div>
+            <div class="text-3xl font-bold text-green-400">{{ regions|length }}</div>
+        </div>
+        <div class="bg-gray-800 p-4 rounded border border-gray-700">
+            <div class="text-gray-400 text-xs uppercase">Active Alerts</div>
+            <div class="text-3xl font-bold text-red-400">{{ alerts.count }}</div>
+        </div>
+    </div>
+
+    <!-- Region Statistics -->
+    <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
+        <i class="ph ph-map-trifold text-blue-500"></i> Region Statistics
+    </h2>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        {% for region in regions %}
+        <div class="bg-gray-800 rounded border border-gray-700 p-5 flex flex-col h-full">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-lg text-white">{{ region.name }}</h3>
+                <span class="text-xs bg-gray-700 px-2 py-1 rounded text-gray-300">{{ region.cluster_count }} Clusters</span>
+            </div>
+            
+            <div class="space-y-3 mb-6">
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-400">Total Hosts / Instances</span>
+                    <span class="text-white">{{ region.host_count }} / {{ region.instance_count }}</span>
+                </div>
+                
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span class="text-gray-400">Total CPU Usage</span>
+                        <span class="text-blue-400">{{ region.cpu_pct }}%</span>
+                    </div>
+                    <div class="w-full bg-gray-700 rounded-full h-1.5">
+                        <div class="bg-blue-500 h-1.5 rounded-full" style="width: {{ region.cpu_pct }}%"></div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span class="text-gray-400">Total RAM Usage</span>
+                        <span class="text-purple-400">{{ region.mem_pct }}%</span>
+                    </div>
+                    <div class="w-full bg-gray-700 rounded-full h-1.5">
+                        <div class="bg-purple-500 h-1.5 rounded-full" style="width: {{ region.mem_pct }}%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cluster Breakdown List -->
+            <div class="mt-auto border-t border-gray-700 pt-3">
+                <h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Clusters</h4>
+                <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {% for c in region.clusters_list %}
+                    <div class="bg-gray-700/30 p-2 rounded text-xs border border-gray-700/50 hover:bg-gray-700/70 transition">
+                        <div class="flex justify-between items-center mb-1">
+                            <!-- Updated: hx-push-url -->
+                            <span class="font-medium text-blue-300 cursor-pointer hover:text-white"
+                                  hx-get="{% url 'cluster_details' c.id %}" 
+                                  hx-target="#main-stage"
+                                  hx-push-url="true">
+                                {{ c.name }}
+                            </span>
+                            <span class="text-gray-500">{{ c.node_count }} Nodes</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-[10px] text-gray-400">
+                            <div>
+                                CPU: <span class="{% if c.cpu_pct > 80 %}text-red-400{% else %}text-gray-300{% endif %}">{{ c.cpu_pct }}%</span>
+                                <span class="opacity-60">({{ c.cpu_usage }})</span>
+                            </div>
+                            <div>
+                                RAM: <span class="{% if c.mem_pct > 85 %}text-red-400{% else %}text-gray-300{% endif %}">{{ c.mem_pct }}%</span>
+                                <span class="opacity-60">({{ c.mem_usage_gb }})</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
+        <i class="ph ph-warning text-yellow-500"></i> Active Alerts
+    </h2>
+    <div class="bg-gray-800 rounded border border-gray-700 overflow-hidden">
+        <table class="w-full text-left text-sm text-gray-400">
+            <thead class="bg-gray-700 text-gray-200 uppercase text-xs">
+                <tr><th class="p-3">Severity</th><th class="p-3">Source</th><th class="p-3">Message</th><th class="p-3">Target</th></tr>
+            </thead>
+            <tbody>
+                {% for alert in alerts %}
+                <tr class="border-b border-gray-700 hover:bg-gray-750">
+                    <td class="p-3">
+                        {% if alert.severity == 'critical' %}
+                            <span class="text-red-400 font-bold">CRITICAL</span>
+                        {% else %}
+                            <span class="text-yellow-400">WARNING</span>
+                        {% endif %}
+                    </td>
+                    <td class="p-3">{{ alert.source }}</td>
+                    <td class="p-3 text-white">{{ alert.title }}</td>
+                    <td class="p-3">
+                        {% if alert.target_host %}
+                            <i class="ph ph-desktop mr-1"></i> {{ alert.target_host.hostname }}
+                        {% elif alert.target_cluster %}
+                            <i class="ph ph-globe mr-1"></i> {{ alert.target_cluster.name }}
+                        {% else %}
+                            System
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

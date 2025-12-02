@@ -1,0 +1,233 @@
+{% load static %}
+<div class="animate-fade-in-up">
+    <!-- Header -->
+    <div class="mb-6 border-b border-gray-700 pb-4 flex justify-between items-start">
+        <div>
+            <h1 class="text-3xl font-bold text-white flex items-center gap-3">
+                <i class="ph ph-globe text-blue-500"></i> {{ cluster.name }}
+            </h1>
+            <div class="mt-2 flex gap-4 text-sm text-gray-400">
+                <span><i class="ph ph-map-pin"></i> {{ cluster.region_name }}</span>
+                <span><i class="ph ph-user"></i> {{ cluster.project_name }}</span>
+                <span class="text-green-400"><i class="ph ph-check-circle"></i> Connected</span>
+            </div>
+        </div>
+        <div>
+            <button hx-get="{% url 'cluster_details' cluster.id %}?refresh=true" 
+                    hx-target="#main-stage"
+                    class="bg-gray-800 hover:bg-gray-700 border border-gray-600 text-gray-200 px-3 py-2 rounded text-sm font-medium transition flex items-center gap-2">
+                <i class="ph ph-arrows-clockwise"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Capacity Overview -->
+    <div class="grid grid-cols-4 gap-6 mb-8">
+        <div class="bg-gray-800 p-4 rounded border border-gray-700">
+            <div class="text-gray-400 text-xs uppercase mb-1">Compute Nodes</div>
+            <div class="text-2xl font-bold text-white">{{ node_count }}</div>
+        </div>
+        <div class="bg-gray-800 p-4 rounded border border-gray-700">
+            <div class="text-gray-400 text-xs uppercase mb-1">Total Instances</div>
+            <div class="text-2xl font-bold text-white">{{ instance_count }}</div>
+        </div>
+        
+        <div class="bg-gray-800 p-4 rounded border border-gray-700">
+            <div class="flex justify-between text-xs uppercase mb-1">
+                <span class="text-gray-400">vCPU Usage</span>
+                <span class="text-white">{{ stats.used_cpu }} / {{ stats.total_cpu }}</span>
+            </div>
+            <div class="w-full bg-gray-700 rounded-full h-2 mt-2">
+                <div class="bg-blue-500 h-2 rounded-full" style="width: {{ cpu_pct }}%"></div>
+            </div>
+            <div class="text-right text-xs text-blue-400 mt-1">{{ cpu_pct }}%</div>
+        </div>
+
+        <div class="bg-gray-800 p-4 rounded border border-gray-700">
+            <div class="flex justify-between text-xs uppercase mb-1">
+                <span class="text-gray-400">RAM Usage (GB)</span>
+                <span class="text-white">{{ stats.used_mem_gb }} / {{ stats.total_mem_gb }}</span>
+            </div>
+            <div class="w-full bg-gray-700 rounded-full h-2 mt-2">
+                <div class="bg-purple-500 h-2 rounded-full" style="width: {{ mem_pct }}%"></div>
+            </div>
+            <div class="text-right text-xs text-purple-400 mt-1">{{ mem_pct }}%</div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-6 mb-8">
+        <!-- Service Status -->
+        <div class="bg-gray-800 rounded border border-gray-700 flex flex-col">
+            <div class="p-4 border-b border-gray-700 font-bold text-lg flex justify-between items-center">
+                <span>Cluster Services</span>
+                <span class="text-xs font-normal bg-gray-700 px-2 py-1 rounded text-gray-300">OpenStack Bobcat</span>
+            </div>
+            <div class="overflow-y-auto max-h-96">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-gray-700/50 text-xs uppercase text-gray-400 sticky top-0">
+                        <tr>
+                            <th class="p-3">Service</th>
+                            <th class="p-3">Host</th>
+                            <th class="p-3">Status</th>
+                            <th class="p-3">Version</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for svc in services %}
+                        <tr class="border-b border-gray-700/50 hover:bg-gray-700/30">
+                            <td class="p-3 font-mono text-gray-300">{{ svc.binary }}</td>
+                            <td class="p-3 text-gray-400 text-xs">{{ svc.host }}</td>
+                            <td class="p-3">
+                                {% if svc.state == 'up' %}
+                                    <span class="text-green-400 text-xs px-2 py-0.5 bg-green-900/30 rounded">UP</span>
+                                {% else %}
+                                    <span class="text-red-400 text-xs px-2 py-0.5 bg-red-900/30 rounded">DOWN</span>
+                                {% endif %}
+                            </td>
+                            <td class="p-3 text-gray-500 text-xs">{{ svc.version }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Active Alerts -->
+        <div class="bg-gray-800 rounded border border-gray-700 flex flex-col">
+            <div class="p-4 border-b border-gray-700 font-bold text-lg flex items-center gap-2">
+                <span>Active Alerts</span>
+                {% if alerts %}
+                <span class="bg-red-900 text-red-200 text-xs px-2 py-0.5 rounded-full">{{ alerts.count }}</span>
+                {% endif %}
+            </div>
+            <div class="overflow-y-auto max-h-96 p-2 space-y-2">
+                {% for alert in alerts %}
+                <div class="p-3 rounded bg-gray-700/50 border border-gray-600 flex items-start gap-3">
+                    {% if alert.severity == 'critical' %}
+                        <i class="ph ph-warning-circle text-red-500 text-xl mt-0.5"></i>
+                    {% else %}
+                        <i class="ph ph-info text-yellow-500 text-xl mt-0.5"></i>
+                    {% endif %}
+                    <div>
+                        <div class="font-semibold text-sm">{{ alert.title }}</div>
+                        <div class="text-xs text-gray-400">{{ alert.description }}</div>
+                        <div class="text-xs text-gray-500 mt-1">{{ alert.created_at|timesince }} ago</div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-center text-gray-500 p-8">No active alerts.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- All Cluster Instances -->
+    <div class="mb-4 flex justify-between items-center">
+        <h3 class="font-bold text-lg border-b border-gray-700 pb-2 flex-1">All Cluster Instances</h3>
+        <button id="export-cluster-instances" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded border border-gray-600 text-xs flex items-center gap-2 transition">
+            <i class="ph ph-download"></i> CSV
+        </button>
+    </div>
+    
+    <div class="bg-gray-800 rounded border border-gray-700 overflow-hidden p-2">
+        <div class="overflow-x-auto">
+            <table id="cluster-instances-table" class="w-full text-left text-sm">
+                <thead class="bg-gray-700 text-xs uppercase text-gray-400">
+                    <tr>
+                        <th class="p-3">Name</th>
+                        <th class="p-3">Host Node</th>
+                        <th class="p-3">Status</th>
+                        <th class="p-3">IP Address</th>
+                        <th class="p-3">Flavor</th>
+                        <th class="p-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for instance in instances %}
+                    <tr class="border-b border-gray-700 last:border-0 hover:bg-gray-700 transition-colors cursor-pointer"
+                        hx-get="{% url 'instance_details' instance.uuid %}"
+                        hx-target="#main-stage"
+                        hx-push-url="true"
+                        title="Click for details">
+                        
+                        <td class="p-3 font-medium text-white flex items-center gap-2">
+                            <i class="ph ph-cube text-blue-400"></i> {{ instance.name }}
+                        </td>
+                        <td class="p-3 text-gray-400">{{ instance.host.hostname }}</td>
+                        <td class="p-3">
+                            {% if instance.status == 'ACTIVE' %}
+                                <span class="text-green-400 flex items-center gap-1"><div class="w-2 h-2 bg-green-400 rounded-full"></div> Active</span>
+                            {% else %}
+                                <span class="text-red-400 flex items-center gap-1"><div class="w-2 h-2 bg-red-400 rounded-full"></div> {{ instance.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="p-3 text-gray-300 font-mono text-xs">{{ instance.ip_address|default:"-" }}</td>
+                        <td class="p-3 text-gray-400">{{ instance.flavor_name }}</td>
+                        <td class="p-3 flex gap-2" onclick="event.stopPropagation()">
+                            <button onclick="openConsole('{{ instance.uuid }}')" class="bg-blue-900 text-blue-200 px-2 py-1 rounded text-xs hover:bg-blue-800 border border-blue-800">Console</button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const initTable = () => {
+                var tableElement = document.querySelector("#cluster-instances-table");
+                if (tableElement && typeof simpleDatatables !== 'undefined') {
+                    if (!tableElement.classList.contains('dataTable-table')) {
+                        const cTable = new simpleDatatables.DataTable(tableElement, {
+                            perPage: 15,
+                            perPageSelect: [15, 50, 100, "All"],
+                            fixedHeight: false,
+                            labels: {
+                                placeholder: "Search instances...",
+                                perPage: "entries per page",
+                                noRows: "No instances found",
+                                info: "Showing {start} to {end} of {rows} entries",
+                            }
+                        });
+                        
+                        // FIX: Re-bind HTMX events after table updates
+                        const refreshHtmx = () => {
+                            if (typeof htmx !== 'undefined') {
+                                htmx.process(tableElement);
+                            }
+                        };
+
+                        cTable.on('datatable.init', refreshHtmx);
+                        cTable.on('datatable.page', refreshHtmx);
+                        cTable.on('datatable.sort', refreshHtmx);
+                        cTable.on('datatable.search', refreshHtmx);
+                        
+                        // Initial Bind
+                        refreshHtmx();
+
+                        document.getElementById('export-cluster-instances').addEventListener('click', () => {
+                            cTable.export({
+                                type: "csv",
+                                filename: "cluster_instances",
+                                download: true,
+                            });
+                        });
+                    }
+                }
+            };
+            
+            // Robust loading for offline support
+            if (typeof simpleDatatables === 'undefined') {
+                const script = document.createElement('script');
+                // Use local static file instead of CDN
+                script.src = "{% static 'portal/vendor/simple-datatables.js' %}";
+                script.onload = initTable;
+                document.head.appendChild(script);
+            } else {
+                initTable();
+            }
+        })();
+    </script>
+</div>

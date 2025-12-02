@@ -1,0 +1,98 @@
+<div class="animate-fade-in-up w-full h-full">
+    <div class="max-w-7xl mx-auto">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+                    <i class="ph ph-scroll text-blue-500"></i> System Logs
+                </h1>
+                <p class="text-gray-400 text-sm mt-1">Audit trail of user actions and system events.</p>
+            </div>
+            <div class="flex gap-2">
+                <button id="export-logs" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded text-sm border border-gray-600 flex items-center gap-2 transition-colors">
+                    <i class="ph ph-download"></i> Export CSV
+                </button>
+            </div>
+        </div>
+
+        <div class="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden p-4">
+            <table id="logs-table" class="w-full text-left text-sm">
+                <thead class="bg-gray-700/50 text-xs uppercase text-gray-400">
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>User / System</th>
+                        <th>Action</th>
+                        <th>Target</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr class="border-b border-gray-700 hover:bg-gray-750 transition-colors">
+                        <td class="whitespace-nowrap text-gray-400">{{ log.timestamp|date:"Y-m-d H:i:s" }}</td>
+                        <td class="font-medium text-white">
+                            {% if log.user %}
+                                <span class="flex items-center gap-1"><i class="ph ph-user"></i> {{ log.user.username }}</span>
+                            {% else %}
+                                <span class="flex items-center gap-1 text-blue-400"><i class="ph ph-robot"></i> System</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if "Failed" in log.action or "Error" in log.action %}
+                                <span class="text-red-400">{{ log.action }}</span>
+                            {% elif "Success" in log.action %}
+                                <span class="text-green-400">{{ log.action }}</span>
+                            {% else %}
+                                <span class="text-blue-300">{{ log.action }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-gray-300">{{ log.target }}</td>
+                        <td class="text-gray-500 truncate max-w-xs" title="{{ log.details }}">{{ log.details }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const initTable = () => {
+                var tableElement = document.querySelector("#logs-table");
+                // Check if library is loaded (it should be loaded by dashboard.html)
+                if (tableElement && typeof simpleDatatables !== 'undefined') {
+                    // Prevent double initialization if HTMX re-runs script
+                    if (!tableElement.classList.contains('dataTable-table')) {
+                        const logTable = new simpleDatatables.DataTable(tableElement, {
+                            perPage: 20,
+                            perPageSelect: [10, 20, 50, 100, "All"],
+                            labels: {
+                                placeholder: "Search logs...",
+                                perPage: "logs per page",
+                                noRows: "No logs found",
+                            }
+                        });
+                        
+                        // Attach Export Listener using the Native .export() from v3.2.0
+                        const exportBtn = document.getElementById('export-logs');
+                        if (exportBtn) {
+                            // Clone button to remove old event listeners if reloading partial
+                            const newBtn = exportBtn.cloneNode(true);
+                            exportBtn.parentNode.replaceChild(newBtn, exportBtn);
+                            
+                            newBtn.addEventListener('click', () => {
+                                logTable.export({
+                                    type: "csv",
+                                    filename: "system_logs",
+                                    download: true,
+                                });
+                            });
+                        }
+                    }
+                }
+            };
+
+            // Initialize immediately
+            initTable();
+        })();
+    </script>
+</div>

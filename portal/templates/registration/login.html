@@ -1,0 +1,57 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | OpenStack Management Portal</title>
+    
+    <!-- Local Offline Assets -->
+    <script src="{% static 'portal/vendor/tailwindcss.js' %}"></script>
+    <script src="{% static 'portal/vendor/phosphor.js' %}"></script>
+</head>
+<body class="bg-gray-900 h-screen flex items-center justify-center font-sans">
+    <div class="bg-gray-800 p-8 rounded-lg shadow-2xl w-96 border border-gray-700">
+        <!-- Branding Header -->
+        <div class="flex flex-col items-center justify-center mb-8">
+            <i class="ph ph-cloud text-blue-400 text-5xl mb-2"></i>
+            <h1 class="text-2xl font-bold text-white tracking-wide">
+                OpenStack<span class="text-blue-400">Portal</span>
+            </h1>
+            <p class="text-gray-400 text-sm mt-2">Sign in to manage infrastructure</p>
+        </div>
+        
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-4">
+                <label class="block text-gray-400 text-sm font-bold mb-2">Username</label>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">
+                        <i class="ph ph-user"></i>
+                    </span>
+                    <input type="text" name="username" class="w-full bg-gray-700 text-white border border-gray-600 rounded py-2 pl-10 pr-3 focus:outline-none focus:border-blue-500 transition-colors" placeholder="Enter username" required>
+                </div>
+            </div>
+            <div class="mb-6">
+                <label class="block text-gray-400 text-sm font-bold mb-2">Password</label>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">
+                        <i class="ph ph-lock-key"></i>
+                    </span>
+                    <input type="password" name="password" class="w-full bg-gray-700 text-white border border-gray-600 rounded py-2 pl-10 pr-3 focus:outline-none focus:border-blue-500 transition-colors" placeholder="••••••••" required>
+                </div>
+            </div>
+            
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition duration-200 flex items-center justify-center gap-2">
+                <i class="ph ph-sign-in"></i> Login
+            </button>
+        </form>
+        
+        {% if form.errors %}
+        <div class="mt-4 p-3 bg-red-900/30 border border-red-800/50 rounded text-red-200 text-sm text-center flex items-center justify-center gap-2">
+            <i class="ph ph-warning-circle"></i> Invalid username or password.
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

@@ -1,0 +1,157 @@
+<div class="animate-fade-in-up p-4">
+    <div class="max-w-4xl mx-auto space-y-8">
+        
+        <!-- Project Description -->
+        <div class="bg-gray-800 border border-gray-700 rounded-lg p-8">
+            <div class="flex items-center gap-4 mb-6">
+                <div class="bg-blue-900/30 p-4 rounded-lg">
+                    <i class="ph ph-cloud text-blue-400 text-4xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-3xl font-bold text-white">OpenStack Management Portal</h1>
+                    <p class="text-gray-400 mt-1">A unified, vCenter-like experience for multi-cluster OpenStack management.</p>
+                </div>
+            </div>
+            
+            <div class="prose prose-invert max-w-none text-gray-300">
+                <p>
+                    This portal is designed to bridge the gap between traditional virtualization management and modern cloud infrastructure. 
+                    It provides a centralized, hierarchical view of global infrastructure across multiple Availability Zones, Clusters, and Physical Hosts.
+                </p>
+            </div>
+
+            <h3 class="text-xl font-bold text-white mt-8 mb-4">Key Features</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="flex items-start gap-3 p-3 bg-gray-700/30 rounded border border-gray-700/50">
+                    <i class="ph ph-tree-structure text-green-400 text-xl"></i>
+                    <div>
+                        <div class="font-semibold text-white">Hierarchical Inventory</div>
+                        <div class="text-xs text-gray-400">Drill-down from Region to Cluster to Host to Instance.</div>
+                    </div>
+                </div>
+                <div class="flex items-start gap-3 p-3 bg-gray-700/30 rounded border border-gray-700/50">
+                    <i class="ph ph-chart-bar text-blue-400 text-xl"></i>
+                    <div>
+                        <div class="font-semibold text-white">Real-time Analytics</div>
+                        <div class="text-xs text-gray-400">Live capacity tracking for CPU and RAM across all regions.</div>
+                    </div>
+                </div>
+                <div class="flex items-start gap-3 p-3 bg-gray-700/30 rounded border border-gray-700/50">
+                    <i class="ph ph-terminal-window text-purple-400 text-xl"></i>
+                    <div>
+                        <div class="font-semibold text-white">No-Auth Console</div>
+                        <div class="text-xs text-gray-400">One-click web console access to any instance via proxy.</div>
+                    </div>
+                </div>
+                <div class="flex items-start gap-3 p-3 bg-gray-700/30 rounded border border-gray-700/50">
+                    <i class="ph ph-warning-circle text-red-400 text-xl"></i>
+                    <div>
+                        <div class="font-semibold text-white">Unified Alerting</div>
+                        <div class="text-xs text-gray-400">Hardware and Software health checks in a single view.</div>
+                    </div>
+                </div>
+                <div class="flex items-start gap-3 p-3 bg-gray-700/30 rounded border border-gray-700/50">
+                    <i class="ph ph-wrench text-yellow-400 text-xl"></i>
+                    <div>
+                        <div class="font-semibold text-white">Maintenance Mode</div>
+                        <div class="text-xs text-gray-400">Host evacuation and maintenance scheduling.</div>
+                    </div>
+                </div>
+                <div class="flex items-start gap-3 p-3 bg-gray-700/30 rounded border border-gray-700/50">
+                    <i class="ph ph-scroll text-cyan-400 text-xl"></i>
+                    <div>
+                        <div class="font-semibold text-white">Audit Logging</div>
+                        <div class="text-xs text-gray-400">Comprehensive logs for user actions and system events.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- License Information -->
+        <div class="bg-gray-800 border border-gray-700 rounded-lg p-8">
+            <h2 class="text-xl font-bold text-white mb-4">License</h2>
+            <div class="flex items-start gap-4 p-4 bg-gray-700/30 rounded border border-gray-600">
+                <div class="bg-green-900/30 p-3 rounded-lg">
+                    <i class="ph ph-gavel text-green-400 text-2xl"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-white text-lg">GNU AGPLv3</h3>
+                    <p class="text-sm text-gray-300 mt-1 mb-3">
+                        This project is open source software licensed under the <strong>GNU Affero General Public License v3</strong>.
+                    </p>
+                    <p class="text-xs text-gray-400 leading-relaxed">
+                        You are free to use, modify, and distribute this software. However, if you modify this software and make it available to others over a network (e.g., as a web service), you must verify that you provide the complete source code of your modified version to the users of the network.
+                    </p>
+                    <div class="mt-4">
+                        <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1">
+                            Read Full License <i class="ph ph-arrow-square-out"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Version History -->
+        <div class="bg-gray-800 border border-gray-700 rounded-lg p-8">
+            <h2 class="text-xl font-bold text-white mb-6">Version History</h2>
+            <div class="relative border-l-2 border-gray-700 ml-3 space-y-8">
+                
+                {% for version in version_history %}
+                <div class="relative pl-8">
+                    <!-- Dot Indicator -->
+                    <div class="absolute -left-[9px] top-0 w-4 h-4 {% if version.is_current %}bg-blue-500{% else %}bg-gray-600{% endif %} rounded-full border-4 border-gray-900"></div>
+                    
+                    <div class="flex justify-between items-start mb-1">
+                        <h3 class="font-bold {% if version.is_current %}text-white{% else %}text-gray-300{% endif %}">
+                            {{ version.version_number }} - {{ version.title }}
+                        </h3>
+                        {% if version.is_current %}
+                        <span class="text-xs text-gray-500 bg-gray-700 px-2 py-1 rounded">Current</span>
+                        {% endif %}
+                    </div>
+                    
+                    {% if version.description %}
+                    <p class="text-sm text-gray-400 mb-2">{{ version.description }}</p>
+                    {% endif %}
+                    
+                    {% if version.features.all %}
+                    <ul class="list-disc list-inside text-sm {% if version.is_current %}text-gray-400{% else %}text-gray-500{% endif %} space-y-1">
+                        {% for feature in version.features.all %}
+                        <li>{{ feature.text }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                
+            </div>
+        </div>
+
+        <!-- Credits -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Links -->
+            <div class="bg-gray-800 border border-gray-700 rounded-lg p-6">
+                <h3 class="text-lg font-bold text-white mb-4">Resources</h3>
+                <a href="https://github.com/raphaelgermon/openstack-portal" target="_blank" class="flex items-center gap-3 p-3 bg-gray-700 hover:bg-gray-600 rounded transition mb-2 group">
+                    <i class="ph ph-github-logo text-2xl text-gray-300 group-hover:text-white"></i>
+                    <div>
+                        <div class="font-medium text-white">GitHub Repository</div>
+                        <div class="text-xs text-gray-400 group-hover:text-gray-300">View source code and issues</div>
+                    </div>
+                    <i class="ph ph-arrow-square-out ml-auto text-gray-500 group-hover:text-white"></i>
+                </a>
+            </div>
+
+            <!-- Creator -->
+            <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 flex flex-col justify-center items-center text-center">
+                <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-2xl font-bold text-white mb-3 shadow-lg">
+                    RG
+                </div>
+                <div class="text-sm text-gray-400 uppercase tracking-wider mb-1">Created By</div>
+                <h3 class="text-xl font-bold text-white">Raphaël GERMON</h3>
+                <p class="text-sm text-gray-500 mt-2">Cloud Infrastructure Architect</p>
+            </div>
+        </div>
+
+    </div>
+</div>

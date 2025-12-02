@@ -1,0 +1,57 @@
+<div class="animate-fade-in-up">
+    <div class="mb-6 border-b border-gray-700 pb-4">
+        <h1 class="text-3xl font-bold text-white flex items-center gap-3">
+            <i class="ph ph-currency-dollar text-green-500"></i> Cost Management
+        </h1>
+        <p class="text-gray-400 text-sm mt-1">Real-time run rate based on hardware amortization and power consumption.</p>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="grid grid-cols-3 gap-6 mb-8">
+        <div class="bg-gray-800 p-5 rounded border border-gray-700">
+            <div class="text-gray-400 text-xs uppercase mb-1">Current Monthly Run Rate</div>
+            <div class="text-3xl font-bold text-white">${{ total_monthly_cost }}</div>
+            <div class="text-xs text-gray-500 mt-2">Based on active instances</div>
+        </div>
+        <div class="bg-gray-800 p-5 rounded border border-gray-700">
+            <div class="text-gray-400 text-xs uppercase mb-1">Projected Yearly Cost</div>
+            <div class="text-3xl font-bold text-green-400">${{ projected_yearly }}</div>
+        </div>
+        <div class="bg-gray-800 p-5 rounded border border-gray-700">
+            <div class="text-gray-400 text-xs uppercase mb-1">Global Rates</div>
+            <div class="flex justify-between text-sm mt-2">
+                <span class="text-gray-300">Electricity:</span>
+                <span class="text-white">${{ settings.electricity_cost }}/kWh</span>
+            </div>
+            <div class="flex justify-between text-sm">
+                <span class="text-gray-300">PUE:</span>
+                <span class="text-white">{{ settings.pue }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Project Breakdown -->
+    <h2 class="text-lg font-bold text-white mb-4">Cost by Project</h2>
+    <div class="bg-gray-800 rounded border border-gray-700 overflow-hidden">
+        <table class="w-full text-left text-sm">
+            <thead class="bg-gray-700 text-xs uppercase text-gray-400">
+                <tr>
+                    <th class="p-3">Project ID</th>
+                    <th class="p-3 text-right">Instance Count</th>
+                    <th class="p-3 text-right">Est. Monthly Cost</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for project in projects %}
+                <tr class="border-b border-gray-700 hover:bg-gray-750">
+                    <td class="p-3 font-mono text-blue-300">{{ project.id }}</td>
+                    <td class="p-3 text-right text-white">{{ project.instance_count }}</td>
+                    <td class="p-3 text-right font-bold text-green-400">${{ project.total_cost|floatform:2 }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="3" class="p-4 text-center text-gray-500">No active projects found.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
