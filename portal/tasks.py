@@ -21,7 +21,7 @@ IDRAC_DEFAULT_PASSWORD = os.environ.get("IDRAC_PASSWORD", "calvin")
 def sync_inventory():
     """
     Syncs OpenStack Services, Hypervisors, Instances, and Volumes.
-    Includes detailed debug logging for Hypervisor stats.
+    Optimized to reduce API calls to the OpenStack controller.
     """
     print(">>> STARTING INVENTORY SYNC TASK")
     
@@ -44,7 +44,7 @@ def sync_inventory():
                     defaults={'zone': getattr(svc, 'availability_zone', 'nova'), 'status': svc.status, 'state': svc.state, 'version': detected_version}
                 )
 
-            # 2. Ironic (BMC)
+            # 2. Ironic (BMC) - One bulk call usually not available via SDK, so iterating list is fast enough (internal DB)
             bmc_map = {}
             try:
                 for node in client.conn.baremetal.nodes():
@@ -58,40 +58,40 @@ def sync_inventory():
             except Exception: pass
 
             # 3. Hypervisors (Hosts)
-            print(f"  [{cluster.name}] Fetching Hypervisors...")
-            hypervisors = client.get_hypervisors()
-            print(f"  [{cluster.name}] Found {len(hypervisors)} hypervisors.")
+            print(f"  [{cluster.name}] Fetching Hypervisor List...")
+            hypervisors = client.get_hypervisors() # 1st API Call (Summary)
             
-            # --- FETCH RAW STATS (Optimization) ---
-            # Fetch all details once using raw API to bypass SDK issues
-            raw_stats_map = {}
+            # --- OPTIMIZATION: Fetch ALL details in 1 Call ---
+            # Instead of querying each host individually for stats, we grab the detail list once.
+            hypervisor_stats_map = {}
             try:
-                print(f"  [{cluster.name}] Fetching raw hypervisor details via /os-hypervisors/detail...")
-                raw_resp = client.conn.compute.get('/os-hypervisors/detail')
+                print(f"  [{cluster.name}] Fetching bulk usage stats...")
+                # Bypassing SDK to get raw dict with all stats guaranteed
+                raw_resp = client.conn.compute.get('/os-hypervisors/detail') # 2nd API Call (Details)
                 if raw_resp.status_code == 200:
                     raw_list = raw_resp.json().get('hypervisors', [])
                     for h in raw_list:
-                        # Map by hostname
-                        raw_stats_map[h.get('hypervisor_hostname')] = h
-                    print(f"  [{cluster.name}] Successfully mapped stats for {len(raw_stats_map)} hosts.")
+                        # Map hostname -> stats dict
+                        hypervisor_stats_map[h.get('hypervisor_hostname')] = h
             except Exception as e:
-                print(f"  [{cluster.name}] Failed to fetch raw stats: {e}")
+                print(f"  [{cluster.name}] Failed to fetch bulk stats: {e}")
 
+            print(f"  [{cluster.name}] Processing {len(hypervisors)} hypervisors...")
+            
             for hyp in hypervisors:
                 found_idrac_ip = bmc_map.get(hyp.name) or bmc_map.get(hyp.id)
                 
-                # --- USE RAW STATS ONLY ---
-                raw_data = raw_stats_map.get(hyp.name, {})
+                # Lookup stats from our bulk dictionary (No new API calls here)
+                raw_stats = hypervisor_stats_map.get(hyp.name, {})
                 
-                cpu_count = raw_data.get('vcpus') or 0
-                vcpus_used = raw_data.get('vcpus_used') or 0
-                memory_mb = raw_data.get('memory_mb') or 0
-                memory_mb_used = raw_data.get('memory_mb_used') or 0
-
-                print(f"    > Host: {hyp.name} [CPUs: {vcpus_used}/{cpu_count}, RAM: {memory_mb_used}/{memory_mb}]")
+                # Prefer raw stats, fallback to SDK object, default to 0
+                cpu_count = raw_stats.get('vcpus') or hyp.vcpus or 0
+                vcpus_used = raw_stats.get('vcpus_used') or hyp.vcpus_used or 0
+                memory_mb = raw_stats.get('memory_mb') or hyp.memory_size or 0
+                memory_mb_used = raw_stats.get('memory_mb_used') or hyp.memory_used or 0
                 
                 # Host IP Fallback
-                host_ip = hyp.host_ip if hyp.host_ip else '0.0.0.0'
+                host_ip = raw_stats.get('host_ip') or hyp.host_ip or '0.0.0.0'
 
                 host_values = {
                     'ip_address': host_ip,
@@ -113,6 +113,9 @@ def sync_inventory():
                 )
                 
                 # 4. Instances
+                # This still requires 1 call per host to get instances on THAT host.
+                # Optimization: We could fetch ALL instances for the cluster once and map them in Python,
+                # but 'get_instances' with filter is usually efficient enough on the DB side.
                 instances = client.get_instances(host_name=host.hostname)
                 for server in instances:
                     # Extract Network Info
@@ -127,7 +130,6 @@ def sync_inventory():
                                     break
                             if ip_address: break
                     
-                    # Extract Image Info
                     image_name = 'N/A'
                     if server.image:
                         if isinstance(server.image, dict):
@@ -135,7 +137,6 @@ def sync_inventory():
                         elif isinstance(server.image, str):
                             image_name = server.image
                     
-                    # Timezone awareness
                     launched_at = None
                     if server.launched_at:
                         launched_at = parse_datetime(server.launched_at)
@@ -174,8 +175,7 @@ def sync_inventory():
                                     'is_bootable': vol.get('bootable', False)
                                 }
                             )
-                    except Exception as e:
-                        print(f"      ! Volume sync error for {server.name}: {e}")
+                    except Exception: pass
 
             AuditLog.objects.create(action="Inventory Sync Success", target=cluster.name, details=f"Synced {len(hypervisors)} hosts.")
 
@@ -192,6 +192,7 @@ def sync_inventory():
                 cluster.save()
 
     print("<<< FINISHED INVENTORY SYNC TASK")
+
 
 
 @shared_task
