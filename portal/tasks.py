@@ -11,14 +11,14 @@ from collections import defaultdict
 import json
 import requests
 import traceback
-import os
+import time
 from requests.auth import HTTPBasicAuth
 from keystoneauth1 import exceptions as ka_exceptions
 from django.utils.dateparse import parse_datetime
+from collections import defaultdict
 
-# Configuration for iDRAC connections (Direct Redfish fallback)
-IDRAC_DEFAULT_USER = os.environ.get("IDRAC_USER", "root")
-IDRAC_DEFAULT_PASSWORD = os.environ.get("IDRAC_PASSWORD", "calvin")
+IDRAC_DEFAULT_USER = "root"
+IDRAC_DEFAULT_PASSWORD = "calvin"
 
 @shared_task
 def sync_inventory():
@@ -244,6 +244,7 @@ def sync_inventory():
                     try:
                         volumes = instance_volume_map.get(server.id, [])
                         for vol in volumes:
+                            # Note: vol is now an SDK object, not a dict
                             Volume.objects.update_or_create(
                                 uuid=vol.id,
                                 defaults={
@@ -451,3 +452,6 @@ def collect_hardware_health():
         finally:
             if redfish_client:
                 redfish_client.logout()
+    for host in hosts:
+        # Redfish logic...
+        pass

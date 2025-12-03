@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenstackPortal Project - Overview</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        html { scroll-behavior: smooth; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+
+    <nav class="bg-white shadow-sm fixed w-full z-50">
+        <div class="max-w-6xl mx-auto px-4">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center">
+                    <i class="fa-solid fa-cloud text-blue-600 text-2xl mr-2"></i>
+                    <span class="font-bold text-xl text-gray-800">OpenstackPortal Project</span>
+                </div>
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="#about" class="text-gray-600 hover:text-blue-600">About</a>
+                    <a href="#screenshots" class="text-gray-600 hover:text-blue-600">Screenshots</a>
+                    <a href="#features" class="text-gray-600 hover:text-blue-600">Features</a>
+                    <a href="https://github.com/raphaelgermon/openstackportal" target="_blank" class="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition">
+                        <i class="fab fa-github mr-2"></i> View on GitHub
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <header class="bg-white pt-32 pb-20">
+        <div class="max-w-6xl mx-auto px-4 text-center">
+            <h1 class="text-5xl md:text-6xl font-extrabold text-gray-900 mb-6">
+                Manage your Openstack Clusters <span class="text-blue-600">Effortlessly</span>
+            </h1>
+            <p class="text-xl text-gray-600 mb-10 max-w-2xl mx-auto">
+                An open-source portal to manage OpenStack clusters, Hypervisors, and Instances. Built with Python, Django, and modern web standards.
+            </p>
+            <div class="flex flex-col sm:flex-row justify-center gap-4">
+                <a href="https://github.com/raphaelgermon/openstackportal" target="_blank" class="px-8 py-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition shadow-lg flex items-center justify-center">
+                    <i class="fab fa-github mr-2"></i> Start on GitHub
+                </a>
+                <a href="#screenshots" class="px-8 py-4 bg-white text-gray-700 border border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition flex items-center justify-center">
+                    See How It Works
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <section id="screenshots" class="py-20 bg-gray-50">
+        <div class="max-w-6xl mx-auto px-4">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl font-bold text-gray-900">Dashboard Interface</h2>
+                <p class="text-gray-600 mt-2">Click any image to view it in full size.</p>
+            </div>
+            
+            <div class="relative rounded-xl overflow-hidden shadow-2xl border border-gray-200 bg-white group">
+                <div class="bg-gray-100 border-b border-gray-200 px-4 py-2 flex items-center space-x-2">
+                    <div class="w-3 h-3 rounded-full bg-red-400"></div>
+                    <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+                    <div class="w-3 h-3 rounded-full bg-green-400"></div>
+                </div>
+                <div class="relative overflow-hidden cursor-pointer" onclick="openModal(this.querySelector('img').src)">
+                    <img src="homepage.png" 
+                         alt="Dashboard Screenshot" 
+                         class="w-full h-auto transition duration-300 hover:scale-[1.02]">
+                    <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition duration-300 flex items-center justify-center">
+                        <i class="fa-solid fa-expand text-white opacity-0 group-hover:opacity-100 text-4xl shadow-sm"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-12">
+                <div class="bg-white p-2 rounded-lg shadow-lg cursor-pointer group" onclick="openModal(this.querySelector('img').src)">
+                    <div class="relative overflow-hidden rounded">
+                        <img src="instance.png" class="w-full transition duration-300 group-hover:opacity-90" alt="Instance details view">
+                    </div>
+                    <p class="p-4 font-semibold text-gray-700 group-hover:text-blue-600 transition">Instance details view <i class="fa-solid fa-magnifying-glass-plus ml-2 opacity-0 group-hover:opacity-100"></i></p>
+                </div>
+                <div class="bg-white p-2 rounded-lg shadow-lg cursor-pointer group" onclick="openModal(this.querySelector('img').src)">
+                    <div class="relative overflow-hidden rounded">
+                        <img src="cluster.png" class="w-full transition duration-300 group-hover:opacity-90" alt="Cluster detail view">
+                    </div>
+                    <p class="p-4 font-semibold text-gray-700 group-hover:text-blue-600 transition">Cluster details view with hardware alerts <i class="fa-solid fa-magnifying-glass-plus ml-2 opacity-0 group-hover:opacity-100"></i></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="features" class="py-20 bg-white">
+        <div class="max-w-6xl mx-auto px-4">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl font-bold text-gray-900">Key Features</h2>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="p-6 bg-gray-50 rounded-xl hover:shadow-md transition">
+                    <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center text-xl mb-4">
+                        <i class="fa-solid fa-server"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Inventory Sync</h3>
+                    <p class="text-gray-600">Automatic synchronization of Hypervisors, Instances, and Volumes from OpenStack.</p>
+                </div>
+                <div class="p-6 bg-gray-50 rounded-xl hover:shadow-md transition">
+                    <div class="w-12 h-12 bg-green-100 text-green-600 rounded-lg flex items-center justify-center text-xl mb-4">
+                        <i class="fa-solid fa-bolt"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Real-time Performance</h3>
+                    <p class="text-gray-600">Monitor sync speeds and API latency with built-in performance profiling.</p>
+                </div>
+                <div class="p-6 bg-gray-50 rounded-xl hover:shadow-md transition">
+                    <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center text-xl mb-4">
+                        <i class="fa-solid fa-lock"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Secure & Scalable</h3>
+                    <p class="text-gray-600">Built on Django with Gunicorn and Nginx for production-grade security.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="bg-gray-900 text-white py-12">
+        <div class="max-w-6xl mx-auto px-4 text-center">
+            <h2 class="text-2xl font-bold mb-4">Ready to try it?</h2>
+            <div class="mb-8">
+                <a href="https://github.com/raphaelgermon/openstackportal" class="text-blue-400 hover:text-blue-300 mx-4">GitHub Repository</a>
+                <a href="#" class="text-gray-400 hover:text-gray-300 mx-4">Documentation</a>
+                <a href="#" class="text-gray-400 hover:text-gray-300 mx-4">Issues</a>
+            </div>
+            <p class="text-gray-500 text-sm">&copy; 2025 OpenstackPortal Project. Open Source.</p>
+        </div>
+    </footer>
+
+    <div id="imageModal" class="fixed inset-0 z-[100] hidden bg-black bg-opacity-95 flex items-center justify-center p-4 transition-opacity duration-300" onclick="closeModal()">
+        <span class="absolute top-6 right-6 text-white text-5xl cursor-pointer hover:text-gray-300 transition" onclick="closeModal()">&times;</span>
+        <img id="modalImage" class="max-w-full max-h-[90vh] rounded-lg shadow-2xl object-contain" src="" alt="Full size preview" onclick="event.stopPropagation()">
+    </div>
+
+    <script>
+        function openModal(src) {
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalImage');
+            modalImg.src = src;
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('imageModal');
+            modal.classList.add('hidden');
+            document.body.style.overflow = 'auto';
+        }
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key === "Escape") {
+                closeModal();
+            }
+        });
+    </script>
+
+</body>
+</html>
