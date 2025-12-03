@@ -217,3 +217,11 @@ USE_TZ = True
 
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'login'
+
+# iDRAC/Redfish Defaults (override via environment)
+IDRAC_DEFAULT_USER = os.environ.get('IDRAC_DEFAULT_USER', 'root')
+IDRAC_DEFAULT_PASSWORD = os.environ.get('IDRAC_DEFAULT_PASSWORD', 'calvin')
+
+# OpenStack SDK settings
+OPENSTACK_CONNECT_TIMEOUT = int(os.environ.get('OPENSTACK_CONNECT_TIMEOUT', 10))
+OPENSTACK_READ_TIMEOUT = int(os.environ.get('OPENSTACK_READ_TIMEOUT', 60))

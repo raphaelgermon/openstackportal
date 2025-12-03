@@ -8,9 +8,11 @@ services:
 
   web:
     build: .
+    entrypoint: ["/app/entrypoint.sh"]
     command: python manage.py runserver 0.0.0.0:10000
     volumes:
       - .:/app
+      - sqlite_data:/app/data
     ports:
       - "10000:10000"
     environment:
@@ -38,3 +40,6 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
     depends_on:
       - redis
+
+volumes:
+  sqlite_data:

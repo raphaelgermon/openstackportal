@@ -136,7 +136,8 @@
                             <span class="text-sm text-white">{{ instance.last_ram_usage_mb|stringformat:".0f" }} MB</span>
                         </div>
                         <div class="w-full bg-gray-700 rounded-full h-2">
-                            <div class="bg-purple-500 h-2 rounded-full" style="width: 40%"></div>
+                            {% widthratio instance.last_ram_usage_mb 8192 100 as ram_pct %}
+                            <div class="bg-purple-500 h-2 rounded-full" style="width: {{ ram_pct|default:0 }}%"></div>
                         </div>
                     </div>
                 </div>
