@@ -1,16 +1,20 @@
 import csv
+import logging
 import os
 import requests
 from requests.auth import HTTPBasicAuth
 
 from django.shortcuts import render, get_object_or_404
+
+logger = logging.getLogger(__name__)
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import HttpResponse, JsonResponse
 from django.db.models import Sum, Count, Q, Exists, OuterRef, Prefetch
 from django.conf import settings
 from django.core.management import call_command
-from .models import Cluster, PhysicalHost, Instance, Alert, AuditLog, PortalSettings, Flavor, ServerCostProfile
+from .models import Cluster, PhysicalHost, Instance, Alert, AuditLog, PortalSettings, Flavor, ServerCostProfile, ClusterService
 from .openstack_utils import OpenStackClient
+from .services import ClusterService as ClusterSvc, CostService, InventoryService
 import random
 from django.utils.dateparse import parse_datetime
 from .tasks import sync_flavors, sync_openmanage, sync_inventory
@@ -29,23 +33,9 @@ def get_annotated_clusters():
     """
     Returns clusters annotated with 'has_active_alert' boolean,
     and pre-fetches hosts also annotated with 'has_active_alert'.
+    Delegates to ClusterService.
     """
-    # Subqueries to check for existence of active alerts
-    host_alerts = Alert.objects.filter(target_host=OuterRef('pk'), is_active=True)
-    cluster_alerts = Alert.objects.filter(target_cluster=OuterRef('pk'), is_active=True)
-    
-    # Annotate hosts first
-    hosts_qs = PhysicalHost.objects.annotate(
-        has_active_alert=Exists(host_alerts)
-    )
-    
-    # Annotate clusters and use Prefetch to load the annotated hosts
-    return Cluster.objects.annotate(
-        has_active_alert=Exists(cluster_alerts)
-    ).prefetch_related(
-        Prefetch('hosts', queryset=hosts_qs),
-        'hosts__instances'
-    ).order_by('region_name', 'name')
+    return ClusterSvc.get_annotated_clusters()
 
 def get_sidebar_context():
     """Helper to generate sidebar data for full-page reloads"""
@@ -72,33 +62,9 @@ def render_page(request, template_name, context, page_type='overview'):
 def calculate_instance_cost(instance, settings_obj):
     """
     Helper to calculate monthly cost for an instance.
-    Returns None if cost cannot be calculated (e.g. missing hardware model).
+    Delegates to CostService.
     """
-    if not instance.host or not instance.host.server_model:
-        return None
-    
-    host = instance.host
-    profile = host.server_model
-    
-    # 1. Calculate Host Monthly Power Cost
-    # Formula: Watts / 1000 * 24hrs * 30days * Cost/kWh * PUE
-    power_cost = (profile.average_watts / 1000) * 24 * 30 * float(settings_obj.electricity_cost) * float(settings_obj.pue)
-    
-    # 2. Total Host Monthly Cost (Amortization + Power)
-    host_total_cost = float(profile.monthly_amortization) + power_cost
-    
-    # 3. Cost per vCPU on this host
-    if host.cpu_count == 0: return 0.0
-    cost_per_vcpu = host_total_cost / host.cpu_count
-    
-    # 4. Instance Cost based on Flavor
-    try:
-        flavor = Flavor.objects.filter(name=instance.flavor_name, cluster=host.cluster).first()
-        vcpus = flavor.vcpus if flavor else 1 
-    except:
-        vcpus = 1
-        
-    return round(cost_per_vcpu * vcpus, 2)
+    return CostService.calculate_instance_cost(instance, settings_obj)
 
 @login_required
 def cost_dashboard(request):
@@ -322,9 +288,12 @@ def node_details(request, host_id):
                     for server in instances:
                         Instance.objects.update_or_create(uuid=server.id, defaults={'host': host, 'name': server.name, 'status': server.status, 'flavor_name': server.flavor.get('original_name', 'unknown'), 'project_id': server.project_id, 'user_id': server.user_id})
             except Exception as e:
-                print(f"Node refresh failed: {e}")
+                logger.error(f"Node refresh failed: {e}")
 
-    return render_page(request, 'portal/partials/node_details.html', {'host': host}, 'node')
+    # Fetch active alerts for this host
+    alerts = Alert.objects.filter(target_host=host, is_active=True).order_by('-created_at')
+    
+    return render_page(request, 'portal/partials/node_details.html', {'host': host, 'alerts': alerts}, 'node')
 
 @login_required
 def instance_details(request, instance_uuid):
@@ -387,7 +356,7 @@ def instance_details(request, instance_uuid):
                 settings_obj = PortalSettings.get_settings()
                 monthly_cost = calculate_instance_cost(instance, settings_obj)
             except Exception as e:
-                print(f"Instance refresh failed for cluster {cluster.name}: {e}")
+                logger.error(f"Instance refresh failed for cluster {cluster.name}: {e}")
 
     return render_page(request, 'portal/partials/instance_details.html', {
         'instance': instance,
@@ -413,7 +382,7 @@ def instance_console(request, instance_uuid):
     instance = get_object_or_404(Instance, pk=instance_uuid)
     console_type = request.GET.get('type', 'novnc')
     
-    print(f"DEBUG: Fetching {console_type} console for {instance.uuid} on cluster {instance.host.cluster.name}")
+    logger.debug(f"Fetching {console_type} console for {instance.uuid} on cluster {instance.host.cluster.name}")
 
     if "example.com" in instance.host.cluster.auth_url or "fake" in instance.host.cluster.auth_url: 
         return JsonResponse({'url': '#dummy-console'})
@@ -422,14 +391,14 @@ def instance_console(request, instance_uuid):
         client = OpenStackClient(instance.host.cluster)
         if console_type == 'spice': 
             data = client.get_spice_console(instance.uuid)
-            print(f"DEBUG: SPICE URL retrieved: {data.get('url')}")
+            logger.debug(f"SPICE URL retrieved successfully")
             return JsonResponse(data)
         else:
             url = client.get_novnc_console(instance.uuid)
-            print(f"DEBUG: NoVNC URL retrieved: {url}")
+            logger.debug(f"NoVNC URL retrieved successfully")
             return JsonResponse({'url': url, 'type': 'novnc'})
     except Exception as e:
-        print(f"ERROR: Console fetch failed: {e}")
+        logger.error(f"Console fetch failed: {e}")
         return JsonResponse({'error': str(e)}, status=400)
 
 

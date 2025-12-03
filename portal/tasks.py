@@ -1,20 +1,25 @@
+import logging
+import time
+import traceback
+from collections import defaultdict
+
+import redfish
+import requests
+from requests.auth import HTTPBasicAuth
 from celery import shared_task
 from django.utils import timezone
 from django.conf import settings
+from django.utils.dateparse import parse_datetime
+from keystoneauth1 import exceptions as ka_exceptions
+
 from .models import Cluster, PhysicalHost, Instance, Alert, ClusterService, AuditLog, Flavor, PortalSettings, Volume
 from .openstack_utils import OpenStackClient
-import redfish
-import json
-import requests
-import traceback
-import time
-from requests.auth import HTTPBasicAuth
-from keystoneauth1 import exceptions as ka_exceptions
-from django.utils.dateparse import parse_datetime
-from collections import defaultdict
 
-IDRAC_DEFAULT_USER = "root"
-IDRAC_DEFAULT_PASSWORD = "calvin"
+logger = logging.getLogger(__name__)
+
+# iDRAC credentials - should be configured in settings/environment
+IDRAC_DEFAULT_USER = getattr(settings, 'IDRAC_DEFAULT_USER', 'root')
+IDRAC_DEFAULT_PASSWORD = getattr(settings, 'IDRAC_DEFAULT_PASSWORD', 'calvin')
 
 @shared_task
 def sync_inventory():
@@ -23,11 +28,11 @@ def sync_inventory():
     Optimized to reduce API calls to the OpenStack controller.
     """
     task_start = time.time()
-    print(">>> STARTING INVENTORY SYNC TASK")
+    logger.info("Starting inventory sync task")
     
     clusters = Cluster.objects.all()
     for cluster in clusters:
-        print(f"--- Processing Cluster: {cluster.name} ---")
+        logger.info(f"Processing cluster: {cluster.name}")
         cluster_start = time.time()
         try:
             client = OpenStackClient(cluster)
@@ -45,7 +50,7 @@ def sync_inventory():
                     cluster=cluster, binary=svc.binary, host=svc.host,
                     defaults={'zone': getattr(svc, 'availability_zone', 'nova'), 'status': svc.status, 'state': svc.state, 'version': detected_version}
                 )
-            print(f"  [{cluster.name}] Services synced in {time.time() - t0:.2f}s")
+            logger.debug(f"[{cluster.name}] Services synced in {time.time() - t0:.2f}s")
 
             # 2. Ironic (BMC) - One bulk call usually not available via SDK, so iterating list is fast enough (internal DB)
             t0 = time.time()
@@ -60,31 +65,31 @@ def sync_inventory():
                         bmc_map[node.id] = address
                         if node.instance_id: bmc_map[node.instance_id] = address
             except Exception: pass
-            print(f"  [{cluster.name}] BMC mapped in {time.time() - t0:.2f}s")
+            logger.debug(f"[{cluster.name}] BMC mapped in {time.time() - t0:.2f}s")
 
             # 3. Hypervisors (Hosts)
             t0 = time.time()
-            print(f"  [{cluster.name}] Fetching Hypervisor List...")
+            logger.debug(f"[{cluster.name}] Fetching Hypervisor List...")
             hypervisors = client.get_hypervisors() # 1st API Call (Summary)
-            print(f"  [{cluster.name}] Hypervisor list ({len(hypervisors)}) fetched in {time.time() - t0:.2f}s")
+            logger.debug(f"[{cluster.name}] Hypervisor list ({len(hypervisors)}) fetched in {time.time() - t0:.2f}s")
             
             # --- OPTIMIZATION 1: Fetch ALL Host details in 1 Call ---
             t0 = time.time()
             hypervisor_stats_map = {}
             try:
-                print(f"  [{cluster.name}] Fetching bulk usage stats...")
+                logger.debug(f"[{cluster.name}] Fetching bulk usage stats...")
                 raw_resp = client.conn.compute.get('/os-hypervisors/detail')
                 if raw_resp.status_code == 200:
                     raw_list = raw_resp.json().get('hypervisors', [])
                     for h in raw_list:
                         hypervisor_stats_map[h.get('hypervisor_hostname')] = h
             except Exception as e:
-                print(f"  [{cluster.name}] Failed to fetch bulk stats: {e}")
-            print(f"  [{cluster.name}] Bulk stats fetched in {time.time() - t0:.2f}s")
+                logger.warning(f"[{cluster.name}] Failed to fetch bulk stats: {e}")
+            logger.debug(f"[{cluster.name}] Bulk stats fetched in {time.time() - t0:.2f}s")
 
             # --- OPTIMIZATION 2: Fetch ALL Instances & Volumes in Bulk ---
             # Instead of N+1 calls inside the loop, we fetch everything once and map it in memory.
-            print(f"  [{cluster.name}] Fetching ALL Instances & Volumes (Bulk)...")
+            logger.debug(f"[{cluster.name}] Fetching ALL Instances & Volumes (Bulk)...")
             
             t0 = time.time()
             host_instance_map = defaultdict(list)
@@ -97,8 +102,8 @@ def sync_inventory():
                     if h_name:
                         host_instance_map[h_name].append(srv)
             except Exception as e:
-                print(f"  [{cluster.name}] Failed to bulk fetch instances: {e}")
-            print(f"  [{cluster.name}] {len(host_instance_map)} Hosts mapped with instances in {time.time() - t0:.2f}s")
+                logger.warning(f"[{cluster.name}] Failed to bulk fetch instances: {e}")
+            logger.debug(f"[{cluster.name}] {len(host_instance_map)} Hosts mapped with instances in {time.time() - t0:.2f}s")
 
             t0 = time.time()
             instance_volume_map = defaultdict(list)
@@ -112,16 +117,16 @@ def sync_inventory():
                         if server_id:
                             instance_volume_map[server_id].append(vol)
             except Exception as e:
-                print(f"  [{cluster.name}] Failed to bulk fetch volumes: {e}")
-            print(f"  [{cluster.name}] {len(instance_volume_map)} Instances mapped with volumes in {time.time() - t0:.2f}s")
+                logger.warning(f"[{cluster.name}] Failed to bulk fetch volumes: {e}")
+            logger.debug(f"[{cluster.name}] {len(instance_volume_map)} Instances mapped with volumes in {time.time() - t0:.2f}s")
 
-            print(f"  [{cluster.name}] Processing {len(hypervisors)} hypervisors...")
+            logger.debug(f"[{cluster.name}] Processing {len(hypervisors)} hypervisors...")
             
             loop_start = time.time()
             for i, hyp in enumerate(hypervisors):
                 # Progress monitor
                 if (i + 1) % 5 == 0:
-                    print(f"    Processing host {i+1}/{len(hypervisors)} ({hyp.name})...")
+                    logger.debug(f"Processing host {i+1}/{len(hypervisors)} ({hyp.name})...")
 
                 found_idrac_ip = bmc_map.get(hyp.name) or bmc_map.get(hyp.id)
                 raw_stats = hypervisor_stats_map.get(hyp.name, {})
@@ -215,32 +220,31 @@ def sync_inventory():
                             )
                     except Exception: pass
             
-            print(f"  [{cluster.name}] Processing loop finished in {time.time() - loop_start:.2f}s")
+            logger.info(f"[{cluster.name}] Processing loop finished in {time.time() - loop_start:.2f}s")
             AuditLog.objects.create(action="Inventory Sync Success", target=cluster.name, details=f"Synced {len(hypervisors)} hosts in {time.time() - cluster_start:.2f}s.")
 
         except ka_exceptions.EndpointNotFound:
-            print(f"  [{cluster.name}] Endpoint Not Found.")
+            logger.error(f"[{cluster.name}] Endpoint Not Found.")
             if cluster.status != 'offline':
                 cluster.status = 'offline'
                 cluster.save()
         except Exception as e:
-            print(f"  [{cluster.name}] ERROR: {e}")
-            traceback.print_exc()
+            logger.error(f"[{cluster.name}] ERROR: {e}", exc_info=True)
             if cluster.status != 'offline':
                 cluster.status = 'offline'
                 cluster.save()
 
-    print(f"<<< FINISHED INVENTORY SYNC TASK (Total: {time.time() - task_start:.2f}s)")
+    logger.info(f"Finished inventory sync task (Total: {time.time() - task_start:.2f}s)")
 
 @shared_task
 def sync_flavors():
     """
     Collects Flavor definitions from all clusters.
     """
-    print(">>> STARTING FLAVOR SYNC")
+    logger.info("Starting flavor sync")
     for cluster in Cluster.objects.all():
         try:
-            print(f"  [{cluster.name}] Syncing flavors...")
+            logger.debug(f"[{cluster.name}] Syncing flavors...")
             client = OpenStackClient(cluster)
             flavors = client.get_flavors()
             count = 0
@@ -257,14 +261,14 @@ def sync_flavors():
                     }
                 )
                 count += 1
-            print(f"  [{cluster.name}] Synced {count} flavors.")
+            logger.info(f"[{cluster.name}] Synced {count} flavors.")
             AuditLog.objects.create(
                 action="Flavor Sync Success",
                 target=cluster.name,
                 details=f"Synced {count} flavors."
             )
         except Exception as e:
-            print(f"  [{cluster.name}] Flavor sync error: {e}")
+            logger.error(f"[{cluster.name}] Flavor sync error: {e}")
             AuditLog.objects.create(
                 action="Flavor Sync Failed",
                 target=cluster.name,
@@ -280,13 +284,13 @@ def sync_openmanage():
     portal_settings = PortalSettings.get_settings()
     
     if not portal_settings.ome_url or not portal_settings.ome_username:
-        print("OME Sync Skipped: No URL/Username configured.")
+        logger.info("OME Sync Skipped: No URL/Username configured.")
         return
 
     base_url = portal_settings.ome_url.rstrip('/')
     auth = HTTPBasicAuth(portal_settings.ome_username, portal_settings.ome_password)
     
-    print(f"Connecting to OME: {base_url}")
+    logger.info(f"Connecting to OME: {base_url}")
     
     try:
         # 1. Fetch Devices
@@ -328,7 +332,7 @@ def sync_openmanage():
                     host.save()
                     synced_count += 1
             
-            print(f"OME Sync: Updated {synced_count} hosts.")
+            logger.info(f"OME Sync: Updated {synced_count} hosts.")
             AuditLog.objects.create(action="OME Sync Success", target="OpenManage", details=f"Updated {synced_count} hosts from OME.")
 
         # 2. Fetch Active Alerts
@@ -352,7 +356,7 @@ def sync_openmanage():
                     )
 
     except Exception as e:
-        print(f"OpenManage Sync Failed: {e}")
+        logger.error(f"OpenManage Sync Failed: {e}")
         AuditLog.objects.create(action="OME Sync Failed", target="OpenManage", details=str(e))
 
 @shared_task
@@ -362,7 +366,7 @@ def collect_hardware_health():
     Fallback if OME is not used.
     """
     hosts = PhysicalHost.objects.exclude(idrac_ip__isnull=True).exclude(idrac_ip__exact='')
-    print(f"Starting Redfish hardware poll for {hosts.count()} hosts.")
+    logger.info(f"Starting Redfish hardware poll for {hosts.count()} hosts.")
 
     for host in hosts:
         redfish_client = None
@@ -384,7 +388,7 @@ def collect_hardware_health():
             if sys_resp.status == 200:
                 health = sys_resp.dict.get('Status', {}).get('Health', 'Unknown')
                 if health in ['Warning', 'Critical']:
-                    print(f"  [{host.hostname}] Health Issue: {health}")
+                    logger.warning(f"[{host.hostname}] Health Issue: {health}")
                     Alert.objects.get_or_create(
                         target_host=host,
                         title=f"System Health: {health}",
@@ -408,6 +412,3 @@ def collect_hardware_health():
         finally:
             if redfish_client:
                 redfish_client.logout()
-    for host in hosts:
-        # Redfish logic...
-        pass
