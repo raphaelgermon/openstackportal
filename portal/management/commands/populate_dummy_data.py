@@ -173,16 +173,5 @@ class Command(BaseCommand):
                     severity="warning", is_active=True,
                     created_at=timezone.now() - timedelta(minutes=random.randint(5, 120))
                 )
-        help = 'Populates database with dummy data'
-
-        def handle(self, *args, **options):
-            # ... (Previous deletions) ...
-            ServerCostProfile.objects.all().delete()
-
-            # Create Cost Profiles
-            profiles = [
-                ServerCostProfile.objects.create(name="Dell PowerEdge R640", monthly_amortization=150.00, average_watts=250),
-                ServerCostProfile.objects.create(name="Dell PowerEdge R740xd", monthly_amortization=280.00, average_watts=450),
-                ServerCostProfile.objects.create(name="HP ProLiant DL380 Gen10", monthly_amortization=220.00, average_watts=350),
-            ]
+        
         self.stdout.write(self.style.SUCCESS(f'Successfully generated {total_vms} instances across {len(all_clusters)} clusters.'))
