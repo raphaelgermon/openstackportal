@@ -126,9 +126,15 @@
         <aside class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col overflow-y-auto select-none">
             <div class="p-3 text-xs font-semibold text-gray-400 uppercase tracking-wider sticky top-0 bg-gray-800 z-10">Global Views</div>
             <div class="px-2 mb-4 space-y-1">
+                                <div class="flex items-center gap-2 p-2 hover:bg-gray-700 rounded cursor-pointer text-gray-300 transition-colors" hx-get="{% url 'cluster_list' %}" hx-target="#main-stage" hx-push-url="true">
+                    <i class="ph ph-planet text-lg"></i><span class="text-sm">All Clusters</span>
+                </div>
                 <div class="flex items-center gap-2 p-2 hover:bg-gray-700 rounded cursor-pointer text-gray-300 transition-colors" hx-get="{% url 'all_instances' %}" hx-target="#main-stage" hx-push-url="true"><i class="ph ph-stack text-lg"></i><span class="text-sm">All Instances</span></div>
                 <div class="flex items-center gap-2 p-2 hover:bg-gray-700 rounded cursor-pointer text-gray-300 transition-colors" hx-get="{% url 'all_nodes' %}" hx-target="#main-stage" hx-push-url="true"><i class="ph ph-hard-drives text-lg"></i><span class="text-sm">All Nodes</span></div>
                 <div class="flex items-center gap-2 p-2 hover:bg-gray-700 rounded cursor-pointer text-gray-300 transition-colors" hx-get="{% url 'all_flavors' %}" hx-target="#main-stage" hx-push-url="true"><i class="ph ph-circles-four text-lg"></i><span class="text-sm">All Flavors</span></div>
+                           <div class="flex items-center gap-2 p-2 hover:bg-gray-700 rounded cursor-pointer text-gray-300 transition-colors" hx-get="{% url 'cost_dashboard' %}" hx-target="#main-stage" hx-push-url="true">
+                    <i class="ph ph-currency-dollar text-lg"></i><span class="text-sm">Cost Analysis</span>
+                </div>
             </div>
             <div class="p-3 text-xs font-semibold text-gray-400 uppercase tracking-wider sticky top-0 bg-gray-800 z-10 border-t border-gray-700">Inventory</div>
             <div class="px-2">

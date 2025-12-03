@@ -25,6 +25,147 @@ def get_app_version():
         pass
     return "dev"
 
+
+def cost_dashboard(request):
+    """
+    Shows estimated costs based on resource usage (Flavors).
+    Estimation Logic: $10/vCPU + $5/GB RAM per month.
+    """
+    clusters = Cluster.objects.all()
+    cost_data = []
+    grand_total = 0
+    
+    for cluster in clusters:
+        instances = Instance.objects.filter(host__cluster=cluster)
+        cluster_monthly_cost = 0
+        
+        # We need to map instances to flavors to get CPU/RAM for cost calc
+        # Optimization: Fetch all flavors for this cluster once
+        flavors = {f.name: f for f in Flavor.objects.filter(cluster=cluster)}
+        
+        for inst in instances:
+            # Match instance flavor name to Flavor object
+            # Note: OpenStack flavor names can be tricky, this is a basic match
+            f = flavors.get(inst.flavor_name)
+            if f:
+                # Cost Formula: $10 per vCPU + $5 per GB RAM
+                monthly = (f.vcpus * 10) + ((f.ram_mb / 1024) * 5)
+                cluster_monthly_cost += monthly
+            else:
+                # Fallback if flavor not found (e.g. $20 flat rate)
+                cluster_monthly_cost += 20 
+
+        cost_data.append({
+            'cluster': cluster,
+            'instance_count': instances.count(),
+            'estimated_cost': round(cluster_monthly_cost, 2)
+        })
+        grand_total += cluster_monthly_cost
+
+    context = {
+        'cost_data': cost_data,
+        'grand_total': round(grand_total, 2)
+    }
+    return render(request, 'portal/cost_dashboard.html', context)
+
+def cluster_list(request):
+    """
+    List all clusters with summary statistics.
+    Suitable for rendering a table that DataTables can enhance.
+    """
+    clusters = Cluster.objects.all()
+    
+    # Add summary stats for each cluster
+    for cluster in clusters:
+        cluster.host_count = PhysicalHost.objects.filter(cluster=cluster).count()
+        cluster.instance_count = PhysicalHost.objects.filter(cluster=cluster).aggregate(
+            total_instances=Count('instances')
+        )['total_instances'] or 0
+
+    context = {
+        'clusters': clusters
+    }
+    return render(request, 'portal/partials/all_clusters.html', context)
+
+@login_required
+def cluster_details(request, pk):
+    cluster = get_object_or_404(Cluster, pk=pk)
+    
+    if request.GET.get('refresh') and "fake" not in cluster.auth_url:
+         try:
+             # Trigger async sync
+             from .tasks import sync_inventory
+             sync_inventory.delay()
+         except: pass
+
+    hosts = cluster.hosts.all()
+    
+    # --- AGGREGATE HOST STATS ---
+    aggs = hosts.aggregate(
+        total_cpu=Sum('cpu_count'), 
+        used_cpu=Sum('vcpus_used'), 
+        total_mem=Sum('memory_mb'), 
+        used_mem=Sum('memory_mb_used')
+    )
+    
+    # Normalize None to 0
+    stats = {
+        'total_cpu': aggs['total_cpu'] or 0,
+        'used_cpu': aggs['used_cpu'] or 0,
+        'total_mem': aggs['total_mem'] or 0,
+        'used_mem': aggs['used_mem'] or 0
+    }
+    # Fetch Aggregates and prefetch the 'hosts' M2M relationship to avoid N+1 queries
+    aggregates = cluster.aggregates.prefetch_related('hosts').all()
+        
+    # Calculate percentages
+    cpu_pct = (stats['used_cpu'] / stats['total_cpu'] * 100) if stats['total_cpu'] > 0 else 0
+    mem_pct = (stats['used_mem'] / stats['total_mem'] * 100) if stats['total_mem'] > 0 else 0
+    
+    # Add GB versions for display
+    stats['total_mem_gb'] = stats['total_mem'] // 1024
+    stats['used_mem_gb'] = stats['used_mem'] // 1024
+
+    services = cluster.services.all().order_by('binary', 'host')
+    alerts = Alert.objects.filter(target_cluster=cluster, is_active=True) | Alert.objects.filter(target_host__cluster=cluster, is_active=True)
+    instances = Instance.objects.filter(host__cluster=cluster).select_related('host').order_by('name')
+    
+    # NEW: Networks
+    networks = cluster.networks.all().order_by('name')
+    print(f"DEBUG: Viewing Cluster ID={cluster.id} Name={cluster.name}. Found {networks.count()} networks in DB.")
+
+    context = {
+        'cluster': cluster,
+        'node_count': hosts.count(),
+        'instance_count': instances.count(),
+        'stats': stats,       
+        'aggregates': aggregates,   
+        'cpu_pct': round(cpu_pct, 1),
+        'mem_pct': round(mem_pct, 1),
+        'services': services,
+        'alerts': alerts,
+        'instances': instances,
+        'networks': networks,
+    }
+    return render_page(request, 'portal/partials/cluster_details.html', context, 'cluster')
+
+
+
+
+def host_detail(request, pk):
+    """
+    Shows details for a specific Physical Host.
+    """
+    host = get_object_or_404(PhysicalHost, pk=pk)
+    
+    context = {
+        'host': host,
+        'aggregates': host.aggregates.all(),
+        'instances': host.instances.all()
+    }
+    return render(request, 'portal/host_detail.html', context)
+
+
 def get_annotated_clusters():
     """
     Returns clusters annotated with 'has_active_alert' boolean,
@@ -233,68 +374,6 @@ def refresh_flavors(request):
     flavors = Flavor.objects.select_related('cluster').all().order_by('name')
     last_update = AuditLog.objects.filter(action="Flavor Sync Success").order_by('-timestamp').first()
     return render(request, 'portal/partials/all_flavors.html', {'flavors': flavors, 'last_update': last_update.timestamp if last_update else None})
-
-@login_required
-def cluster_details(request, cluster_id):
-    cluster = get_object_or_404(Cluster, pk=cluster_id)
-    
-    if request.GET.get('refresh') and "fake" not in cluster.auth_url:
-         try:
-             client = OpenStackClient(cluster)
-             # 1. Sync Services
-             for svc in client.get_services():
-                 ClusterService.objects.update_or_create(cluster=cluster, binary=svc.binary, host=svc.host, defaults={'zone': getattr(svc, 'availability_zone', 'nova'), 'status': svc.status, 'state': svc.state})
-             
-             # 2. Sync Host Stats (Needed for aggregation)
-             # Note: We don't do full sync_inventory here to be fast, just stats if possible,
-             # but full sync is handled by task. Refresh here implies we want updated DB view.
-             # We will rely on the scheduled task for heavy lifting, or trigger it:
-             from .tasks import sync_inventory
-             sync_inventory.delay()
-         except: pass
-
-    hosts = cluster.hosts.all()
-    
-    # --- AGGREGATE HOST STATS ---
-    aggs = hosts.aggregate(
-        total_cpu=Sum('cpu_count'), 
-        used_cpu=Sum('vcpus_used'), 
-        total_mem=Sum('memory_mb'), 
-        used_mem=Sum('memory_mb_used')
-    )
-    
-    # Normalize None to 0
-    stats = {
-        'total_cpu': aggs['total_cpu'] or 0,
-        'used_cpu': aggs['used_cpu'] or 0,
-        'total_mem': aggs['total_mem'] or 0,
-        'used_mem': aggs['used_mem'] or 0
-    }
-    
-    # Calculate percentages
-    cpu_pct = (stats['used_cpu'] / stats['total_cpu'] * 100) if stats['total_cpu'] > 0 else 0
-    mem_pct = (stats['used_mem'] / stats['total_mem'] * 100) if stats['total_mem'] > 0 else 0
-    
-    # Add GB versions for display
-    stats['total_mem_gb'] = stats['total_mem'] // 1024
-    stats['used_mem_gb'] = stats['used_mem'] // 1024
-
-    services = cluster.services.all().order_by('binary', 'host')
-    alerts = Alert.objects.filter(target_cluster=cluster, is_active=True) | Alert.objects.filter(target_host__cluster=cluster, is_active=True)
-    instances = Instance.objects.filter(host__cluster=cluster).select_related('host').order_by('name')
-
-    context = {
-        'cluster': cluster,
-        'node_count': hosts.count(),
-        'instance_count': instances.count(),
-        'stats': stats,          # Passing the stats dict for template access
-        'cpu_pct': round(cpu_pct, 1),
-        'mem_pct': round(mem_pct, 1),
-        'services': services,
-        'alerts': alerts,
-        'instances': instances
-    }
-    return render_page(request, 'portal/partials/cluster_details.html', context, 'cluster')
 
 
 @login_required

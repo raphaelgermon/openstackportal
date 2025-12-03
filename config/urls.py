@@ -38,6 +38,10 @@ urlpatterns = [
     path('portal/console/<uuid:instance_uuid>/', views.instance_console, name='instance_console'),
     path('portal/node/<int:host_id>/toggle-maintenance/', views.toggle_maintenance, name='toggle_maintenance'),
     path('portal/instance/<uuid:instance_uuid>/snapshot/', views.schedule_snapshot, name='schedule_snapshot'),
+
+    path('clusters/', views.cluster_list, name='cluster_list'),
+    path('cluster/<int:pk>/', views.cluster_details, name='cluster_details'),
+    path('host/<int:pk>/', views.host_detail, name='host_detail'),
 ]
 
 

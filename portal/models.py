@@ -78,6 +78,49 @@ class Cluster(models.Model):
     project_name = models.CharField(max_length=100)
     region_name = models.CharField(max_length=100, default='RegionOne')
     status = models.CharField(max_length=20, default='unknown')
+    
+    # New Infrastructure Details
+    bond_interface = models.CharField(max_length=50, blank=True, help_text="e.g. bond0")
+    storage_network = models.CharField(max_length=100, blank=True, help_text="CIDR or Network Name")
+    management_network = models.CharField(max_length=100, blank=True, help_text="CIDR or Network Name")
+
+    def set_password(self, raw_password):
+        if not raw_password: return
+        cipher = get_cipher()
+        self.password = cipher.encrypt(raw_password.encode()).decode()
+
+    def get_password(self):
+        if not self.password: return ""
+        try:
+            cipher = get_cipher()
+            return cipher.decrypt(self.password.encode()).decode()
+        except Exception: return ""
+
+    def __str__(self):
+        return self.name    
+class HostAggregate(models.Model):
+    """Represents an OpenStack Host Aggregate (e.g. 'gpu-pool', 'ssd-pool')"""
+    cluster = models.ForeignKey(Cluster, on_delete=models.CASCADE, related_name='aggregates')
+    name = models.CharField(max_length=100)
+    uuid = models.CharField(max_length=100, blank=True)
+    
+    def __str__(self):
+        return self.name
+    
+class Network(models.Model):
+    uuid = models.CharField(max_length=64, primary_key=True)
+    cluster = models.ForeignKey(Cluster, on_delete=models.CASCADE, related_name='networks')
+    name = models.CharField(max_length=255)
+    cidr = models.CharField(max_length=255, blank=True, help_text="Comma separated CIDRs if multiple")
+    gateway_ip = models.CharField(max_length=255, blank=True)
+    status = models.CharField(max_length=50)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+
+
 
     def set_password(self, raw_password):
         if not raw_password: return
@@ -140,6 +183,8 @@ class PhysicalHost(models.Model):
     
     # NEW: Link to cost profile (Optional: can be null if unknown)
     server_model = models.ForeignKey(ServerCostProfile, on_delete=models.SET_NULL, null=True, blank=True)
+    # Link to Aggregates
+    aggregates = models.ManyToManyField(HostAggregate, related_name='hosts', blank=True)
     
     bios_version = models.CharField(max_length=50, blank=True)
     idrac_version = models.CharField(max_length=50, blank=True)

@@ -92,7 +92,36 @@ class OpenStackClient:
         except Exception as e:
             print(f"Error fetching volumes for {server_id}: {e}")
             return []
-
+    def get_networks_details(self):
+        """Fetches networks and correlates with subnets to get CIDR/Gateway"""
+        try:
+            networks = list(self.conn.network.networks())
+            subnets = list(self.conn.network.subnets())
+            subnet_map = {s.id: s for s in subnets}
+            
+            results = []
+            for n in networks:
+                cidrs = []
+                gateways = []
+                for subnet_id in n.subnet_ids:
+                    s = subnet_map.get(subnet_id)
+                    if s:
+                        if s.cidr: cidrs.append(s.cidr)
+                        if s.gateway_ip: gateways.append(s.gateway_ip)
+                
+                results.append({
+                    'id': n.id,
+                    'name': n.name,
+                    'status': n.status,
+                    'cidr': ", ".join(cidrs) if cidrs else "-",
+                    'gateway': ", ".join(gateways) if gateways else "-"
+                })
+            return results
+        except Exception as e:
+            print(f"Error fetching networks: {e}")
+            return []
+        
+        
     def get_realtime_stats(self, server_id):
         try:
             return self.conn.compute.get_server_diagnostics(server_id)

@@ -1,57 +1,74 @@
-<div class="animate-fade-in-up">
-    <div class="mb-6 border-b border-gray-700 pb-4">
-        <h1 class="text-3xl font-bold text-white flex items-center gap-3">
-            <i class="ph ph-currency-dollar text-green-500"></i> Cost Management
-        </h1>
-        <p class="text-gray-400 text-sm mt-1">Real-time run rate based on hardware amortization and power consumption.</p>
+<div class="fade-in">
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-100 flex items-center gap-2">
+                <i class="ph ph-currency-dollar text-green-400"></i> Cost Analysis
+            </h1>
+            <p class="text-gray-400 text-sm mt-1">Estimated monthly run rate based on active flavors ($10/vCPU + $5/GB RAM)</p>
+        </div>
+        <div class="text-xs text-gray-500 font-mono bg-gray-800 px-2 py-1 rounded">
+            Updated: {% now "H:i" %}
+        </div>
     </div>
 
-    <!-- KPI Cards -->
-    <div class="grid grid-cols-3 gap-6 mb-8">
-        <div class="bg-gray-800 p-5 rounded border border-gray-700">
-            <div class="text-gray-400 text-xs uppercase mb-1">Current Monthly Run Rate</div>
-            <div class="text-3xl font-bold text-white">${{ total_monthly_cost }}</div>
-            <div class="text-xs text-gray-500 mt-2">Based on active instances</div>
-        </div>
-        <div class="bg-gray-800 p-5 rounded border border-gray-700">
-            <div class="text-gray-400 text-xs uppercase mb-1">Projected Yearly Cost</div>
-            <div class="text-3xl font-bold text-green-400">${{ projected_yearly }}</div>
-        </div>
-        <div class="bg-gray-800 p-5 rounded border border-gray-700">
-            <div class="text-gray-400 text-xs uppercase mb-1">Global Rates</div>
-            <div class="flex justify-between text-sm mt-2">
-                <span class="text-gray-300">Electricity:</span>
-                <span class="text-white">${{ settings.electricity_cost }}/kWh</span>
+    <!-- Summary Banner -->
+    <div class="bg-gradient-to-r from-green-900/80 to-teal-900/80 rounded-lg shadow-lg p-6 text-white mb-8 border border-green-700/50 backdrop-blur-sm">
+        <div class="flex justify-between items-center">
+            <div>
+                <h2 class="text-lg font-semibold text-green-100">Total Estimated Monthly Cost</h2>
+                <p class="text-sm text-green-300/80">Aggregated across all {{ cost_data|length }} clusters</p>
             </div>
-            <div class="flex justify-between text-sm">
-                <span class="text-gray-300">PUE:</span>
-                <span class="text-white">{{ settings.pue }}</span>
+            <div class="text-4xl font-bold font-mono tracking-tight text-white drop-shadow-sm">
+                ${{ grand_total }}
             </div>
         </div>
     </div>
 
-    <!-- Project Breakdown -->
-    <h2 class="text-lg font-bold text-white mb-4">Cost by Project</h2>
-    <div class="bg-gray-800 rounded border border-gray-700 overflow-hidden">
-        <table class="w-full text-left text-sm">
-            <thead class="bg-gray-700 text-xs uppercase text-gray-400">
-                <tr>
-                    <th class="p-3">Project ID</th>
-                    <th class="p-3 text-right">Instance Count</th>
-                    <th class="p-3 text-right">Est. Monthly Cost</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for project in projects %}
-                <tr class="border-b border-gray-700 hover:bg-gray-750">
-                    <td class="p-3 font-mono text-blue-300">{{ project.id }}</td>
-                    <td class="p-3 text-right text-white">{{ project.instance_count }}</td>
-                    <td class="p-3 text-right font-bold text-green-400">${{ project.total_cost|floatform:2 }}</td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="3" class="p-4 text-center text-gray-500">No active projects found.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <!-- Cluster Breakdown -->
+    <div class="bg-gray-800 border border-gray-700 rounded-lg shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-700 bg-gray-800/50 flex justify-between items-center">
+            <h3 class="text-lg font-semibold text-gray-200">Breakdown by Cluster</h3>
+            <button class="text-gray-400 hover:text-white transition-colors"><i class="ph ph-download-simple"></i></button>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-gray-900/50 text-gray-400 uppercase text-xs border-b border-gray-700">
+                        <th class="py-3 px-6 font-medium">Cluster Name</th>
+                        <th class="py-3 px-6 text-center font-medium">Active Instances</th>
+                        <th class="py-3 px-6 text-right font-medium">Estimated Monthly Cost</th>
+                    </tr>
+                </thead>
+                <tbody class="text-gray-300 text-sm divide-y divide-gray-700">
+                    {% for item in cost_data %}
+                    <tr class="hover:bg-gray-700/30 transition-colors">
+                        <td class="py-4 px-6 font-medium text-blue-300">
+                            <div class="flex items-center gap-2">
+                                <i class="ph ph-globe text-gray-500"></i> {{ item.cluster.name }}
+                            </div>
+                        </td>
+                        <td class="py-4 px-6 text-center">
+                            <span class="bg-blue-900/50 text-blue-300 border border-blue-800 py-1 px-3 rounded-full text-xs font-bold">
+                                {{ item.instance_count }}
+                            </span>
+                        </td>
+                        <td class="py-4 px-6 text-right font-mono font-bold text-green-400">
+                            ${{ item.estimated_cost }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="3" class="py-8 text-center text-gray-500 italic">No cost data available.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="bg-gray-900/50 font-bold text-gray-200 border-t border-gray-700">
+                    <tr>
+                        <td class="py-3 px-6 text-right" colspan="2">Total</td>
+                        <td class="py-3 px-6 text-right font-mono text-green-400">${{ grand_total }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
     </div>
 </div>

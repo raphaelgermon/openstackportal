@@ -121,6 +121,101 @@
         </div>
     </div>
 
+    <!-- Host Aggregates Section -->
+    <div class="bg-gray-800 rounded border border-gray-700 mb-8">
+        <div class="px-6 py-4 border-b border-gray-700 flex items-center gap-2">
+            <h3 class="text-lg font-bold text-gray-200 flex items-center gap-2">
+                <i class="ph ph-squares-four text-blue-400"></i> Host Aggregates
+            </h3>
+        </div>
+        <div class="p-6">
+            {% with agg_list=cluster.aggregates.all %}
+                {% if agg_list %}
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {% for agg in agg_list %}
+                        <div class="bg-gray-700/40 border border-gray-600 rounded p-4 hover:bg-gray-700/60 transition shadow-sm">
+                            <div class="flex items-center justify-between border-b border-gray-600 pb-2 mb-2">
+                                <div class="font-bold text-gray-200 flex items-center gap-2">
+                                    <i class="ph ph-squares-four text-blue-400"></i> {{ agg.name }}
+                                </div>
+                                <span class="text-xs font-mono bg-gray-800 text-gray-400 px-2 py-0.5 rounded border border-gray-600">
+                                    {{ agg.hosts.count }} Nodes
+                                </span>
+                            </div>
+                            <div class="text-sm">
+                                {% if agg.hosts.all %}
+                                    <ul class="space-y-1 mt-2">
+                                        {% for host in agg.hosts.all %}
+                                            <li class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
+                                                <i class="ph ph-desktop text-gray-500 text-xs"></i>
+                                                <a href="{% url 'node_details' host.pk %}" 
+                                                   hx-get="{% url 'node_details' host.pk %}"
+                                                   hx-target="#main-stage"
+                                                   class="hover:underline decoration-blue-500 decoration-1 underline-offset-2">
+                                                    {{ host.hostname }}
+                                                </a>
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    <span class="italic text-gray-500 text-xs">No hosts assigned</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-gray-500 italic text-center py-4">No Host Aggregates found for this cluster.</p>
+                {% endif %}
+            {% endwith %}
+        </div>
+    </div>
+
+    <!-- Cluster Networks -->
+    <div class="mb-4 flex justify-between items-center">
+        <h3 class="font-bold text-lg border-b border-gray-700 pb-2 flex-1">Cluster Networks</h3>
+    </div>
+    
+    <div class="bg-gray-800 rounded border border-gray-700 overflow-hidden p-2 mb-8">
+        <div class="overflow-x-auto">
+            <table id="cluster-networks-table" class="w-full text-left text-sm">
+                <thead class="bg-gray-700 text-xs uppercase text-gray-400">
+                    <tr>
+                        <th class="p-3">Network Name</th>
+                        <th class="p-3">Subnet</th>
+                        <th class="p-3">CIDR Block</th>
+                        <th class="p-3">Gateway</th>
+                        <th class="p-3">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for net in networks %}
+                    <tr class="border-b border-gray-700 last:border-0 hover:bg-gray-700 transition-colors">
+                        <td class="p-3 font-medium text-white flex items-center gap-2">
+                            <i class="ph ph-globe-simple text-blue-400"></i> {{ net.name }}
+                        </td>
+                        <td class="p-3 text-gray-400 font-mono text-xs">{{ net.subnet_id|default:"-" }}</td>
+                        <td class="p-3 text-gray-300 font-mono text-xs">{{ net.cidr|default:"-" }}</td>
+                        <td class="p-3 text-gray-300 font-mono text-xs">{{ net.gateway_ip|default:"-" }}</td>
+                        <td class="p-3">
+                            {% if net.status == 'ACTIVE' %}
+                                <span class="text-green-400 text-xs px-2 py-0.5 bg-green-900/30 rounded border border-green-900/50">Active</span>
+                            {% else %}
+                                <span class="text-yellow-400 text-xs px-2 py-0.5 bg-yellow-900/30 rounded border border-yellow-900/50">{{ net.status }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="5" class="p-6 text-center text-gray-500 italic">No networks configured for this cluster.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+
     <!-- All Cluster Instances -->
     <div class="mb-4 flex justify-between items-center">
         <h3 class="font-bold text-lg border-b border-gray-700 pb-2 flex-1">All Cluster Instances</h3>
@@ -176,11 +271,12 @@
 
     <script>
         (function() {
-            const initTable = () => {
-                var tableElement = document.querySelector("#cluster-instances-table");
-                if (tableElement && typeof simpleDatatables !== 'undefined') {
-                    if (!tableElement.classList.contains('dataTable-table')) {
-                        const cTable = new simpleDatatables.DataTable(tableElement, {
+            const initTables = () => {
+                // Initialize Instances Table
+                var instancesTableEl = document.querySelector("#cluster-instances-table");
+                if (instancesTableEl && typeof simpleDatatables !== 'undefined') {
+                    if (!instancesTableEl.classList.contains('dataTable-table')) {
+                        const iTable = new simpleDatatables.DataTable(instancesTableEl, {
                             perPage: 15,
                             perPageSelect: [15, 50, 100, "All"],
                             fixedHeight: false,
@@ -192,27 +288,37 @@
                             }
                         });
                         
-                        // FIX: Re-bind HTMX events after table updates
-                        const refreshHtmx = () => {
-                            if (typeof htmx !== 'undefined') {
-                                htmx.process(tableElement);
-                            }
-                        };
-
-                        cTable.on('datatable.init', refreshHtmx);
-                        cTable.on('datatable.page', refreshHtmx);
-                        cTable.on('datatable.sort', refreshHtmx);
-                        cTable.on('datatable.search', refreshHtmx);
-                        
-                        // Initial Bind
+                        // Setup HTMX refresh hooks for instances table
+                        const refreshHtmx = () => { if (typeof htmx !== 'undefined') { htmx.process(instancesTableEl); } };
+                        iTable.on('datatable.init', refreshHtmx);
+                        iTable.on('datatable.page', refreshHtmx);
+                        iTable.on('datatable.sort', refreshHtmx);
+                        iTable.on('datatable.search', refreshHtmx);
                         refreshHtmx();
 
-                        document.getElementById('export-cluster-instances').addEventListener('click', () => {
-                            cTable.export({
-                                type: "csv",
-                                filename: "cluster_instances",
-                                download: true,
+                        const exportBtn = document.getElementById('export-cluster-instances');
+                        if (exportBtn) {
+                            exportBtn.addEventListener('click', () => {
+                                iTable.export({ type: "csv", filename: "cluster_instances", download: true });
                             });
+                        }
+                    }
+                }
+
+                // Initialize Networks Table
+                var networksTableEl = document.querySelector("#cluster-networks-table");
+                if (networksTableEl && typeof simpleDatatables !== 'undefined') {
+                    if (!networksTableEl.classList.contains('dataTable-table')) {
+                        const nTable = new simpleDatatables.DataTable(networksTableEl, {
+                            perPage: 5,
+                            perPageSelect: [5, 10, "All"],
+                            fixedHeight: false,
+                            searchable: true,
+                            labels: {
+                                placeholder: "Search networks...",
+                                perPage: "entries",
+                                noRows: "No networks found",
+                            }
                         });
                     }
                 }
@@ -221,12 +327,11 @@
             // Robust loading for offline support
             if (typeof simpleDatatables === 'undefined') {
                 const script = document.createElement('script');
-                // Use local static file instead of CDN
                 script.src = "{% static 'portal/vendor/simple-datatables.js' %}";
-                script.onload = initTable;
+                script.onload = initTables;
                 document.head.appendChild(script);
             } else {
-                initTable();
+                initTables();
             }
         })();
     </script>

@@ -2,9 +2,12 @@ from celery import shared_task
 from django.utils import timezone
 from django.conf import settings
 # Ensure PortalSettings and Volume are imported here
-from .models import Cluster, PhysicalHost, Instance, Alert, ClusterService, AuditLog, Flavor, PortalSettings, Volume
+from .models import Cluster, PhysicalHost, Instance, Alert, ClusterService, AuditLog, Flavor, PortalSettings, Volume, HostAggregate, Network
 from .openstack_utils import OpenStackClient
 import redfish
+import time
+from collections import defaultdict
+
 import json
 import requests
 import traceback
@@ -20,14 +23,16 @@ IDRAC_DEFAULT_PASSWORD = os.environ.get("IDRAC_PASSWORD", "calvin")
 @shared_task
 def sync_inventory():
     """
-    Syncs OpenStack Services, Hypervisors, Instances, and Volumes.
-    Includes detailed debug logging for Hypervisor stats.
+    Syncs OpenStack Services, Hypervisors, Instances, Volumes, Aggregates, and Networks.
+    Optimized to reduce API calls to the OpenStack controller.
     """
+    task_start = time.time()
     print(">>> STARTING INVENTORY SYNC TASK")
     
     clusters = Cluster.objects.all()
     for cluster in clusters:
         print(f"--- Processing Cluster: {cluster.name} ---")
+        cluster_start = time.time()
         try:
             client = OpenStackClient(cluster)
             detected_version = client.get_cluster_release()
@@ -37,14 +42,33 @@ def sync_inventory():
                 cluster.save()
 
             # 1. Services
+            t0 = time.time()
             services = client.get_services()
             for svc in services:
                 ClusterService.objects.update_or_create(
                     cluster=cluster, binary=svc.binary, host=svc.host,
                     defaults={'zone': getattr(svc, 'availability_zone', 'nova'), 'status': svc.status, 'state': svc.state, 'version': detected_version}
                 )
+            print(f"  [{cluster.name}] Services synced in {time.time() - t0:.2f}s")
 
-            # 2. Ironic (BMC)
+            # 2. Networks (NEW)
+            t0 = time.time()
+            networks_data = client.get_networks_details()
+            for net_data in networks_data:
+                Network.objects.update_or_create(
+                    uuid=net_data['id'],
+                    cluster=cluster,
+                    defaults={
+                        'name': net_data['name'],
+                        'status': net_data['status'],
+                        'cidr': net_data['cidr'],
+                        'gateway_ip': net_data['gateway']
+                    }
+                )
+            print(f"  [{cluster.name}] {len(networks_data)} Networks synced in {time.time() - t0:.2f}s")
+
+            # 3. Ironic (BMC) - Internal DB lookup
+            t0 = time.time()
             bmc_map = {}
             try:
                 for node in client.conn.baremetal.nodes():
@@ -56,42 +80,94 @@ def sync_inventory():
                         bmc_map[node.id] = address
                         if node.instance_id: bmc_map[node.instance_id] = address
             except Exception: pass
+            print(f"  [{cluster.name}] BMC mapped in {time.time() - t0:.2f}s")
 
-            # 3. Hypervisors (Hosts)
-            print(f"  [{cluster.name}] Fetching Hypervisors...")
-            hypervisors = client.get_hypervisors()
-            print(f"  [{cluster.name}] Found {len(hypervisors)} hypervisors.")
             
-            # --- FETCH RAW STATS (Optimization) ---
-            # Fetch all details once using raw API to bypass SDK issues
-            raw_stats_map = {}
+
+            # 4. Aggregates (NEW)
+            t0 = time.time()
+            aggregate_map = defaultdict(list) # host_name -> [agg_object, ...]
             try:
-                print(f"  [{cluster.name}] Fetching raw hypervisor details via /os-hypervisors/detail...")
+                aggs = list(client.conn.compute.aggregates())
+                for agg in aggs:
+                    agg_obj, _ = HostAggregate.objects.update_or_create(
+                        cluster=cluster,
+                        name=agg.name,
+                        defaults={'uuid': agg.id}
+                    )
+                    for host_name in agg.hosts:
+                        aggregate_map[host_name].append(agg_obj)
+                print(f"  [{cluster.name}] {len(aggs)} Aggregates synced in {time.time() - t0:.2f}s")
+            except Exception as e:
+                print(f"  [{cluster.name}] Failed to sync aggregates: {e}")
+
+            # 5. Hypervisors (Hosts)
+            t0 = time.time()
+            print(f"  [{cluster.name}] Fetching Hypervisor List...")
+            hypervisors = client.get_hypervisors() # 1st API Call (Summary)
+            print(f"  [{cluster.name}] Hypervisor list ({len(hypervisors)}) fetched in {time.time() - t0:.2f}s")
+            
+            # --- OPTIMIZATION 1: Fetch ALL Host details in 1 Call ---
+            t0 = time.time()
+            hypervisor_stats_map = {}
+            try:
+                print(f"  [{cluster.name}] Fetching bulk usage stats...")
                 raw_resp = client.conn.compute.get('/os-hypervisors/detail')
                 if raw_resp.status_code == 200:
                     raw_list = raw_resp.json().get('hypervisors', [])
                     for h in raw_list:
-                        # Map by hostname
-                        raw_stats_map[h.get('hypervisor_hostname')] = h
-                    print(f"  [{cluster.name}] Successfully mapped stats for {len(raw_stats_map)} hosts.")
+                        hypervisor_stats_map[h.get('hypervisor_hostname')] = h
             except Exception as e:
-                print(f"  [{cluster.name}] Failed to fetch raw stats: {e}")
+                print(f"  [{cluster.name}] Failed to fetch bulk stats: {e}")
+            print(f"  [{cluster.name}] Bulk stats fetched in {time.time() - t0:.2f}s")
 
-            for hyp in hypervisors:
+            # --- OPTIMIZATION 2: Fetch ALL Instances & Volumes in Bulk ---
+            print(f"  [{cluster.name}] Fetching ALL Instances & Volumes (Bulk)...")
+            
+            t0 = time.time()
+            host_instance_map = defaultdict(list)
+            try:
+                # Fetch all servers across all tenants with details
+                all_servers = list(client.conn.compute.servers(details=True, all_tenants=True))
+                for srv in all_servers:
+                    # Determine which host this instance belongs to
+                    h_name = srv.hypervisor_hostname or srv.compute_host
+                    if h_name:
+                        host_instance_map[h_name].append(srv)
+            except Exception as e:
+                print(f"  [{cluster.name}] Failed to bulk fetch instances: {e}")
+            print(f"  [{cluster.name}] {len(host_instance_map)} Hosts mapped with instances in {time.time() - t0:.2f}s")
+
+            t0 = time.time()
+            instance_volume_map = defaultdict(list)
+            try:
+                # Fetch all volumes across all tenants
+                all_volumes = list(client.conn.block_storage.volumes(all_tenants=True))
+                for vol in all_volumes:
+                    for attachment in vol.attachments:
+                        server_id = attachment.get('server_id')
+                        if server_id:
+                            instance_volume_map[server_id].append(vol)
+            except Exception as e:
+                print(f"  [{cluster.name}] Failed to bulk fetch volumes: {e}")
+            print(f"  [{cluster.name}] {len(instance_volume_map)} Instances mapped with volumes in {time.time() - t0:.2f}s")
+
+            print(f"  [{cluster.name}] Processing {len(hypervisors)} hypervisors...")
+            
+            loop_start = time.time()
+            for i, hyp in enumerate(hypervisors):
+                # Progress monitor
+                if (i + 1) % 5 == 0:
+                    print(f"    Processing host {i+1}/{len(hypervisors)} ({hyp.name})...")
+
                 found_idrac_ip = bmc_map.get(hyp.name) or bmc_map.get(hyp.id)
+                raw_stats = hypervisor_stats_map.get(hyp.name, {})
                 
-                # --- USE RAW STATS ONLY ---
-                raw_data = raw_stats_map.get(hyp.name, {})
-                
-                cpu_count = raw_data.get('vcpus') or 0
-                vcpus_used = raw_data.get('vcpus_used') or 0
-                memory_mb = raw_data.get('memory_mb') or 0
-                memory_mb_used = raw_data.get('memory_mb_used') or 0
-
-                print(f"    > Host: {hyp.name} [CPUs: {vcpus_used}/{cpu_count}, RAM: {memory_mb_used}/{memory_mb}]")
-                
-                # Host IP Fallback
-                host_ip = hyp.host_ip if hyp.host_ip else '0.0.0.0'
+                cpu_count = raw_stats.get('vcpus') or hyp.vcpus or 0
+                vcpus_used = raw_stats.get('vcpus_used') or hyp.vcpus_used or 0
+                memory_mb = raw_stats.get('memory_mb') or hyp.memory_size or 0
+                memory_mb_used = raw_stats.get('memory_mb_used') or hyp.memory_used or 0
+                host_ip = raw_stats.get('host_ip') or hyp.host_ip or '0.0.0.0'
 
                 host_values = {
                     'ip_address': host_ip,
@@ -111,9 +187,16 @@ def sync_inventory():
                     hostname=hyp.name,
                     defaults=host_values
                 )
+
+                # Link Aggregates (NEW)
+                if host.hostname in aggregate_map:
+                    host.aggregates.set(aggregate_map[host.hostname])
+                else:
+                    host.aggregates.clear()
                 
-                # 4. Instances
-                instances = client.get_instances(host_name=host.hostname)
+                # Instances (Look up from bulk map)
+                instances = host_instance_map.get(host.hostname, [])
+                
                 for server in instances:
                     # Extract Network Info
                     ip_address = None
@@ -127,7 +210,6 @@ def sync_inventory():
                                     break
                             if ip_address: break
                     
-                    # Extract Image Info
                     image_name = 'N/A'
                     if server.image:
                         if isinstance(server.image, dict):
@@ -135,7 +217,6 @@ def sync_inventory():
                         elif isinstance(server.image, str):
                             image_name = server.image
                     
-                    # Timezone awareness
                     launched_at = None
                     if server.launched_at:
                         launched_at = parse_datetime(server.launched_at)
@@ -159,25 +240,25 @@ def sync_inventory():
                         }
                     )
                     
-                    # 5. Volumes
+                    # Volumes (Look up from bulk map)
                     try:
-                        volumes = client.get_attached_volumes(server.id)
+                        volumes = instance_volume_map.get(server.id, [])
                         for vol in volumes:
                             Volume.objects.update_or_create(
-                                uuid=vol['uuid'],
+                                uuid=vol.id,
                                 defaults={
                                     'instance': inst_obj,
-                                    'name': vol.get('name') or '',
-                                    'size_gb': vol.get('size') or 0,
-                                    'device': vol.get('device') or '',
-                                    'status': vol.get('status', 'unknown'),
-                                    'is_bootable': vol.get('bootable', False)
+                                    'name': vol.name or '',
+                                    'size_gb': vol.size or 0,
+                                    'device': vol.attachments[0].get('device') if vol.attachments else '',
+                                    'status': vol.status or 'unknown',
+                                    'is_bootable': getattr(vol, 'bootable', False)
                                 }
                             )
-                    except Exception as e:
-                        print(f"      ! Volume sync error for {server.name}: {e}")
-
-            AuditLog.objects.create(action="Inventory Sync Success", target=cluster.name, details=f"Synced {len(hypervisors)} hosts.")
+                    except Exception: pass
+            
+            print(f"  [{cluster.name}] Processing loop finished in {time.time() - loop_start:.2f}s")
+            AuditLog.objects.create(action="Inventory Sync Success", target=cluster.name, details=f"Synced hosts, networks, and aggregates.")
 
         except ka_exceptions.EndpointNotFound:
             print(f"  [{cluster.name}] Endpoint Not Found.")
@@ -191,7 +272,7 @@ def sync_inventory():
                 cluster.status = 'offline'
                 cluster.save()
 
-    print("<<< FINISHED INVENTORY SYNC TASK")
+    print(f"<<< FINISHED INVENTORY SYNC TASK (Total: {time.time() - task_start:.2f}s)")
 
 
 @shared_task

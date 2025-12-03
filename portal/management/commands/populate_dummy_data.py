@@ -4,7 +4,7 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.contrib.auth.models import User
-from portal.models import Cluster, PhysicalHost, Instance, Alert, ClusterService, AuditLog, Flavor, Volume, ServerCostProfile
+from portal.models import Cluster, PhysicalHost, Instance, Alert, ClusterService, AuditLog, Flavor, Volume, ServerCostProfile,Network
 
 class Command(BaseCommand):
     help = 'Populates the database with massive dummy OpenStack inventory and logs'
@@ -20,6 +20,7 @@ class Command(BaseCommand):
         AuditLog.objects.all().delete()
         Volume.objects.all().delete() 
         ServerCostProfile.objects.all().delete()
+        Network.objects.all().delete()
         
         # Note: We are not deleting AppVersion here to preserve history if it exists, 
         # or you can uncomment the line below to reset it.
@@ -78,6 +79,21 @@ class Command(BaseCommand):
                 # Flavors
                 for fname, vcpus, ram, disk, public in flavors_template:
                     Flavor.objects.create(uuid=str(uuid.uuid4()), cluster=cluster, name=fname, vcpus=vcpus, ram_mb=ram, disk_gb=disk, is_public=public)
+                # Networks 
+                networks = [
+                    ('provider-net', f'10.{c_idx}.0.0/24', f'10.{c_idx}.0.1'),
+                    ('internal-apps', f'192.168.{c_idx}.0/24', f'192.168.{c_idx}.1'),
+                    ('db-replication', f'172.16.{c_idx}.0/24', f'172.16.{c_idx}.1'),
+                ]
+                for net_name, cidr, gateway in networks:
+                    Network.objects.create(
+                        uuid=str(uuid.uuid4()),
+                        cluster=cluster,
+                        name=net_name,
+                        cidr=cidr,
+                        gateway_ip=gateway,
+                        status='ACTIVE'
+                    )
 
                 # Hosts
                 # 5 to 8 hosts per cluster * 6 clusters = ~30 to 48 hosts
