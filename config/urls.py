@@ -19,6 +19,9 @@ urlpatterns = [
     path('accounts/login/', auth_views.LoginView.as_view(), name='login'),
     path('accounts/logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('api/v1/', include(router.urls)),
+    
+    # DataTable API
+    path('api/dt/instances/', views.api_instance_datatable, name='api_instance_datatable'),
 
     # Inventory Routes
     path('portal/all-instances/', views.all_instances, name='all_instances'), 
