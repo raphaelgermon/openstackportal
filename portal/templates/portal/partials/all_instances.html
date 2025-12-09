@@ -12,7 +12,7 @@
             </button>
             <div class="bg-gray-800 px-4 py-2 rounded border border-gray-700 text-sm">
                 <span class="text-gray-400">Total Count:</span> 
-                <span class="text-white font-bold ml-1">{{ instances.count }}</span>
+                <span class="text-white font-bold ml-1">{{ instances.count|default:"-" }}</span>
             </div>
         </div>
     </div>
@@ -28,38 +28,11 @@
                         <th class="p-3">Status</th>
                         <th class="p-3">IP Address</th>
                         <th class="p-3">Flavor</th>
-                        <th class="p-3">Actions</th>
+                        <th class="p-3" data-sortable="false">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for instance in instances %}
-                    <tr class="border-b border-gray-700 last:border-0 hover:bg-gray-750 transition-colors cursor-pointer"
-                        hx-get="{% url 'instance_details' instance.uuid %}"
-                        hx-target="#main-stage"
-                        hx-push-url="true"
-                        title="Click for details">
-                        
-                        <td class="p-3 font-medium text-white flex items-center gap-2">
-                            <i class="ph ph-cube text-blue-400"></i> {{ instance.name }}
-                        </td>
-                        <td class="p-3 text-blue-300">{{ instance.host.cluster.name }}</td>
-                        <td class="p-3 text-gray-400">{{ instance.host.hostname }}</td>
-                        <td class="p-3">
-                            {% if instance.status == 'ACTIVE' %}
-                                <span class="text-green-400 flex items-center gap-1"><div class="w-2 h-2 bg-green-400 rounded-full"></div> Active</span>
-                            {% else %}
-                                <span class="text-red-400 flex items-center gap-1"><div class="w-2 h-2 bg-red-400 rounded-full"></div> {{ instance.status }}</span>
-                            {% endif %}
-                        </td>
-                        <td class="p-3 text-gray-300 font-mono text-xs">{{ instance.ip_address|default:"-" }}</td>
-                        <td class="p-3 text-gray-400">{{ instance.flavor_name }}</td>
-                        <td class="p-3 flex gap-2" onclick="event.stopPropagation()">
-                            <button onclick="openConsole('{{ instance.uuid }}')" class="bg-blue-900 text-blue-200 px-2 py-1 rounded text-xs hover:bg-blue-800 border border-blue-800">Console</button>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    {% endfor %}
-                </tbody>
+                    </tbody>
             </table>
         </div>
     </div>
@@ -71,7 +44,22 @@
                 if (tableElement && typeof simpleDatatables !== 'undefined') {
                     if (!tableElement.classList.contains('dataTable-table')) {
                         const instTable = new simpleDatatables.DataTable(tableElement, {
-                            perPage: 15, perPageSelect: [15, 50, 100, "All"]
+                            perPage: 15,
+                            perPageSelect: [15, 50, 100],
+                            fixedHeight: false,
+                            searchable: true,
+                            labels: {
+                                placeholder: "Search instances...",
+                                perPage: "entries per page",
+                                noRows: "No instances found",
+                            },
+                            data: {
+                                server: {
+                                    url: "{% url 'api_instance_datatable' %}?type=all",
+                                    then: data => data.data.map(row => row),
+                                    total: data => data.totalRows
+                                }
+                            }
                         });
                         
                         const exportBtn = document.getElementById('export-instances');
@@ -79,16 +67,15 @@
                             const newBtn = exportBtn.cloneNode(true);
                             exportBtn.parentNode.replaceChild(newBtn, exportBtn);
                             newBtn.addEventListener('click', () => {
-                                instTable.export({ type: "csv", filename: "all_instances", download: true });
+                                // Note: Simple-Datatables export might only export current page for server-side
+                                window.location.href = "{% url 'export_instances_csv' %}"; 
                             });
                         }
                     }
                 }
             };
             
-            // Check for v3.2.0 specific method to be sure
-            if (typeof simpleDatatables === 'undefined' || !simpleDatatables.DataTable.prototype.export) {
-                // If loaded version is wrong or missing, force load v3.2.0
+            if (typeof simpleDatatables === 'undefined') {
                 const script = document.createElement('script');
                 script.src = "https://cdn.jsdelivr.net/npm/simple-datatables@3.2.0/dist/umd/simple-datatables.js";
                 script.onload = initTable;
