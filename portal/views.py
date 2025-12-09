@@ -9,6 +9,9 @@ from django.http import HttpResponse, JsonResponse
 from django.db.models import Sum, Count, Q, Exists, OuterRef, Prefetch
 from django.conf import settings
 from django.core.management import call_command
+from django.core.paginator import Paginator
+from django.utils.html import format_html
+from django.urls import reverse
 from .models import Cluster, PhysicalHost, Instance, Alert, AuditLog, PortalSettings, Flavor, ServerCostProfile
 from .openstack_utils import OpenStackClient
 import random
@@ -148,8 +151,6 @@ def cluster_details(request, pk):
         'networks': networks,
     }
     return render_page(request, 'portal/partials/cluster_details.html', context, 'cluster')
-
-
 
 
 def host_detail(request, pk):
@@ -353,8 +354,8 @@ def dashboard(request):
 
 @login_required
 def all_instances(request):
-    instances = Instance.objects.select_related('host__cluster').all().order_by('name')
-    return render_page(request, 'portal/partials/all_instances.html', {'instances': instances}, 'all_instances')
+    # Pass empty queryset initially; DataTable will load data via API
+    return render_page(request, 'portal/partials/all_instances.html', {'instances': []}, 'all_instances')
 
 @login_required
 def all_nodes(request):
@@ -684,3 +685,115 @@ def admin_settings(request):
             except ValueError: pass
 
     return render_page(request, 'portal/partials/admin_settings.html', {'settings': portal_settings, 'clusters': clusters, 'cost_profiles': cost_profiles}, 'admin')
+
+@login_required
+def api_instance_datatable(request):
+    """
+    Server-side processor for Simple-DataTables.
+    Accepts: page, perPage, query, type (all/cluster), cluster_id
+    """
+    # 1. Base QuerySet
+    req_type = request.GET.get('type', 'all')
+    cluster_id = request.GET.get('cluster_id')
+    
+    queryset = Instance.objects.select_related('host', 'host__cluster').all()
+    
+    if req_type == 'cluster' and cluster_id:
+        queryset = queryset.filter(host__cluster_id=cluster_id)
+
+    # 2. Search (Global Search)
+    query = request.GET.get('query', '').strip()
+    if query:
+        queryset = queryset.filter(
+            Q(name__icontains=query) |
+            Q(ip_address__icontains=query) |
+            Q(status__icontains=query) |
+            Q(flavor_name__icontains=query) |
+            Q(host__hostname__icontains=query)
+        )
+
+    # 3. Sorting
+    sort_col = request.GET.get('sort', None) 
+    sort_dir = request.GET.get('dir', 'asc')
+    
+    if sort_col is not None:
+        try:
+            sort_col = int(sort_col)
+            # Map column index to model fields based on the table view
+            if req_type == 'all':
+                # Columns: Name, Cluster, Host, Status, IP, Flavor
+                columns = ['name', 'host__cluster__name', 'host__hostname', 'status', 'ip_address', 'flavor_name']
+            else: # cluster view
+                # Columns: Name, Host, Status, IP, Flavor
+                columns = ['name', 'host__hostname', 'status', 'ip_address', 'flavor_name']
+                
+            if 0 <= sort_col < len(columns):
+                field = columns[sort_col]
+                if sort_dir == 'desc':
+                    field = f'-{field}'
+                queryset = queryset.order_by(field)
+        except ValueError:
+            pass # Ignore invalid sort params
+    else:
+        queryset = queryset.order_by('name')
+
+    # 4. Pagination
+    try:
+        page_num = int(request.GET.get('page', 1))
+        per_page = int(request.GET.get('perPage', 10))
+    except ValueError:
+        page_num = 1
+        per_page = 10
+
+    paginator = Paginator(queryset, per_page)
+    page_obj = paginator.get_page(page_num)
+
+    # 5. Serialize Data
+    data = []
+    for inst in page_obj:
+        # -- Render Status Badge --
+        if inst.status == 'ACTIVE':
+            status_html = f'<span class="text-green-400 flex items-center gap-1"><div class="w-2 h-2 bg-green-400 rounded-full"></div> Active</span>'
+        else:
+            status_html = f'<span class="text-red-400 flex items-center gap-1"><div class="w-2 h-2 bg-red-400 rounded-full"></div> {inst.status}</span>'
+
+        # -- Render Action Buttons --
+        # Using openConsole via onclick
+        actions_html = f"""
+        <div class="flex gap-2" onclick="event.stopPropagation()">
+            <button onclick="openConsole('{inst.uuid}')" class="bg-blue-900 text-blue-200 px-2 py-1 rounded text-xs hover:bg-blue-800 border border-blue-800">Console</button>
+        </div>
+        """
+
+        # -- Build Row --
+        # Name cell with clickable link logic could be added here, 
+        # but for now we match the visual style. 
+        # Ideally, clicking the row in simple-datatables handles navigation via JS event listeners or <a> tags.
+        # Here we use an anchor tag for robust navigation.
+        details_url = reverse('instance_details', args=[inst.uuid])
+        name_html = f'''
+        <a href="{details_url}" hx-get="{details_url}" hx-target="#main-stage" hx-push-url="true" class="font-medium text-white flex items-center gap-2 hover:text-blue-300 transition-colors" onclick="event.stopPropagation(); htmx.ajax('GET', '{details_url}', '#main-stage')">
+            <i class="ph ph-cube text-blue-400"></i> {inst.name}
+        </a>
+        '''
+        
+        host_name = inst.host.hostname if inst.host else "N/A"
+        host_cell = f'<span class="text-gray-400">{host_name}</span>'
+        ip_cell = f'<span class="text-gray-300 font-mono text-xs">{inst.ip_address or "-"}</span>'
+        flavor_cell = f'<span class="text-gray-400">{inst.flavor_name}</span>'
+
+        if req_type == 'all':
+            cluster_name = inst.host.cluster.name if inst.host and inst.host.cluster else "N/A"
+            cluster_cell = f'<span class="text-blue-300">{cluster_name}</span>'
+            row = [name_html, cluster_cell, host_cell, status_html, ip_cell, flavor_cell, actions_html]
+        else:
+            row = [name_html, host_cell, status_html, ip_cell, flavor_cell, actions_html]
+            
+        data.append(row)
+
+    return JsonResponse({
+        'data': data,
+        'totalPages': paginator.num_pages,
+        'totalRows': paginator.count,
+        'currentPage': page_num
+    })
