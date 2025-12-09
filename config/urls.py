@@ -22,7 +22,11 @@ urlpatterns = [
     
     # DataTable API
     path('api/dt/instances/', views.api_instance_datatable, name='api_instance_datatable'),
-
+    
+    path('portal/export/instances/', views.export_instances_csv, name='export_instances_csv'),
+    path('portal/export/nodes/', views.export_nodes_csv, name='export_nodes_csv'),
+    path('portal/export/logs/', views.export_logs_csv, name='export_logs_csv'),
+    
     # Inventory Routes
     path('portal/all-instances/', views.all_instances, name='all_instances'), 
     path('portal/all-nodes/', views.all_nodes, name='all_nodes'),
