@@ -1,0 +1,141 @@
+<div id="instance-table-container" class="fade-in">
+    <div class="flex justify-between items-center mb-4 gap-4">
+        <div class="relative flex-1 max-w-md">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">
+                <i class="ph ph-magnifying-glass"></i>
+            </span>
+            <input type="text" name="q" value="{{ query }}" placeholder="Search instances..." 
+                   class="w-full bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded py-2 pl-9 pr-4 focus:outline-none focus:border-blue-500 transition-colors"
+                   hx-get="{% url 'instance_table' %}" 
+                   hx-trigger="keyup changed delay:300ms, search" 
+                   hx-target="#instance-list-content" 
+                   hx-select="#instance-list-content"
+                   hx-include="[name='cluster_id']">
+        </div>
+        
+        <select name="perPage" class="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded px-3 py-2 focus:outline-none"
+                hx-get="{% url 'instance_table' %}" 
+                hx-trigger="change" 
+                hx-target="#instance-list-content" 
+                hx-select="#instance-list-content"
+                hx-include="[name='q'], [name='cluster_id']">
+            <option value="15" {% if per_page == 15 %}selected{% endif %}>15 rows</option>
+            <option value="50" {% if per_page == 50 %}selected{% endif %}>50 rows</option>
+            <option value="100" {% if per_page == 100 %}selected{% endif %}>100 rows</option>
+        </select>
+        
+        <input type="hidden" name="cluster_id" value="{{ cluster_id|default:'' }}">
+    </div>
+
+    <div id="instance-list-content">
+        <div class="bg-gray-800 rounded border border-gray-700 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-gray-700 text-xs uppercase text-gray-400">
+                        <tr>
+                            {% with base_url="?q="|add:query|add:"&cluster_id="|add:cluster_id|default:""|add:"&perPage="|add:per_page %}
+                            
+                            <th class="p-3 cursor-pointer hover:text-white" 
+                                hx-get="{% url 'instance_table' %}{{ base_url }}&sort=name&dir={% if sort_by == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" 
+                                hx-target="#instance-list-content" hx-select="#instance-list-content">
+                                Name {% if sort_by == 'name' %}<i class="ph ph-caret-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}"></i>{% endif %}
+                            </th>
+                            
+                            {% if not cluster_id %}
+                            <th class="p-3 cursor-pointer hover:text-white" 
+                                hx-get="{% url 'instance_table' %}{{ base_url }}&sort=cluster&dir={% if sort_by == 'cluster' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" 
+                                hx-target="#instance-list-content" hx-select="#instance-list-content">
+                                Cluster {% if sort_by == 'cluster' %}<i class="ph ph-caret-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}"></i>{% endif %}
+                            </th>
+                            {% endif %}
+
+                            <th class="p-3 cursor-pointer hover:text-white" 
+                                hx-get="{% url 'instance_table' %}{{ base_url }}&sort=host&dir={% if sort_by == 'host' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" 
+                                hx-target="#instance-list-content" hx-select="#instance-list-content">
+                                Host {% if sort_by == 'host' %}<i class="ph ph-caret-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}"></i>{% endif %}
+                            </th>
+                            
+                            <th class="p-3 cursor-pointer hover:text-white" 
+                                hx-get="{% url 'instance_table' %}{{ base_url }}&sort=status&dir={% if sort_by == 'status' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" 
+                                hx-target="#instance-list-content" hx-select="#instance-list-content">
+                                Status {% if sort_by == 'status' %}<i class="ph ph-caret-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}"></i>{% endif %}
+                            </th>
+
+                            <th class="p-3 cursor-pointer hover:text-white" 
+                                hx-get="{% url 'instance_table' %}{{ base_url }}&sort=ip&dir={% if sort_by == 'ip' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" 
+                                hx-target="#instance-list-content" hx-select="#instance-list-content">
+                                IP Address {% if sort_by == 'ip' %}<i class="ph ph-caret-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}"></i>{% endif %}
+                            </th>
+                            
+                            <th class="p-3">Flavor</th>
+                            <th class="p-3">Actions</th>
+                            {% endwith %}
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-700">
+                        {% for instance in instances %}
+                        <tr class="hover:bg-gray-700/50 transition-colors cursor-pointer"
+                            hx-get="{% url 'instance_details' instance.uuid %}" hx-target="#main-stage" hx-push-url="true">
+                            
+                            <td class="p-3 font-medium text-white flex items-center gap-2">
+                                <i class="ph ph-cube text-blue-400"></i> {{ instance.name }}
+                            </td>
+                            
+                            {% if not cluster_id %}
+                            <td class="p-3 text-blue-300">{{ instance.host.cluster.name }}</td>
+                            {% endif %}
+                            
+                            <td class="p-3 text-gray-400">{{ instance.host.hostname }}</td>
+                            
+                            <td class="p-3">
+                                {% if instance.status == 'ACTIVE' %}
+                                    <span class="text-green-400 flex items-center gap-1 text-xs font-bold uppercase"><div class="w-1.5 h-1.5 bg-green-400 rounded-full"></div> Active</span>
+                                {% else %}
+                                    <span class="text-red-400 flex items-center gap-1 text-xs font-bold uppercase"><div class="w-1.5 h-1.5 bg-red-400 rounded-full"></div> {{ instance.status }}</span>
+                                {% endif %}
+                            </td>
+                            
+                            <td class="p-3 text-gray-300 font-mono text-xs">{{ instance.ip_address|default:"-" }}</td>
+                            <td class="p-3 text-gray-400 text-xs">{{ instance.flavor_name }}</td>
+                            
+                            <td class="p-3" onclick="event.stopPropagation()">
+                                <button onclick="openConsole('{{ instance.uuid }}')" class="bg-blue-900/50 hover:bg-blue-800 border border-blue-800 text-blue-200 px-2 py-1 rounded text-xs transition">
+                                    Console
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="p-8 text-center text-gray-500">
+                                <i class="ph ph-magnifying-glass text-2xl mb-2"></i>
+                                <p>No instances found matching your criteria.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            {% if instances.paginator.num_pages > 1 %}
+            <div class="px-4 py-3 border-t border-gray-700 bg-gray-900/50 flex justify-between items-center text-sm">
+                <div class="text-gray-400">Showing {{ instances.start_index }}-{{ instances.end_index }} of {{ instances.paginator.count }}</div>
+                <div class="flex gap-1">
+                    {% if instances.has_previous %}
+                    <button hx-get="{% url 'instance_table' %}?page={{ instances.previous_page_number }}&q={{ query }}&sort={{ sort_by }}&dir={{ sort_dir }}&cluster_id={{ cluster_id|default:'' }}&perPage={{ per_page }}"
+                            hx-target="#instance-list-content" hx-select="#instance-list-content"
+                            class="px-3 py-1 bg-gray-800 border border-gray-600 rounded text-gray-300 hover:text-white transition">Prev</button>
+                    {% endif %}
+                    
+                    <span class="px-3 py-1 text-gray-500">Page {{ instances.number }} of {{ instances.paginator.num_pages }}</span>
+
+                    {% if instances.has_next %}
+                    <button hx-get="{% url 'instance_table' %}?page={{ instances.next_page_number }}&q={{ query }}&sort={{ sort_by }}&dir={{ sort_dir }}&cluster_id={{ cluster_id|default:'' }}&perPage={{ per_page }}"
+                            hx-target="#instance-list-content" hx-select="#instance-list-content"
+                            class="px-3 py-1 bg-gray-800 border border-gray-600 rounded text-gray-300 hover:text-white transition">Next</button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>  

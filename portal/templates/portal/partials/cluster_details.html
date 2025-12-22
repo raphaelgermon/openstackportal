@@ -1,6 +1,5 @@
 {% load static %}
 <div class="animate-fade-in-up">
-    <!-- Header -->
     <div class="mb-6 border-b border-gray-700 pb-4 flex justify-between items-start">
         <div>
             <h1 class="text-3xl font-bold text-white flex items-center gap-3">
@@ -21,7 +20,6 @@
         </div>
     </div>
 
-    <!-- Capacity Overview -->
     <div class="grid grid-cols-4 gap-6 mb-8">
         <div class="bg-gray-800 p-4 rounded border border-gray-700">
             <div class="text-gray-400 text-xs uppercase mb-1">Compute Nodes</div>
@@ -56,7 +54,6 @@
     </div>
 
     <div class="grid grid-cols-2 gap-6 mb-8">
-        <!-- Service Status -->
         <div class="bg-gray-800 rounded border border-gray-700 flex flex-col">
             <div class="p-4 border-b border-gray-700 font-bold text-lg flex justify-between items-center">
                 <span>Cluster Services</span>
@@ -92,7 +89,6 @@
             </div>
         </div>
 
-        <!-- Active Alerts -->
         <div class="bg-gray-800 rounded border border-gray-700 flex flex-col">
             <div class="p-4 border-b border-gray-700 font-bold text-lg flex items-center gap-2">
                 <span>Active Alerts</span>
@@ -121,7 +117,6 @@
         </div>
     </div>
 
-    <!-- Host Aggregates Section -->
     <div class="bg-gray-800 rounded border border-gray-700 mb-8">
         <div class="px-6 py-4 border-b border-gray-700 flex items-center gap-2">
             <h3 class="text-lg font-bold text-gray-200 flex items-center gap-2">
@@ -171,7 +166,6 @@
         </div>
     </div>
 
-    <!-- Cluster Networks -->
     <div class="mb-4 flex justify-between items-center">
         <h3 class="font-bold text-lg border-b border-gray-700 pb-2 flex-1">Cluster Networks</h3>
     </div>
@@ -216,96 +210,21 @@
     </div>
 
 
-    <!-- All Cluster Instances -->
     <div class="mb-4 flex justify-between items-center">
-        <h3 class="font-bold text-lg border-b border-gray-700 pb-2 flex-1">All Cluster Instances</h3>
-        <button id="export-cluster-instances" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded border border-gray-600 text-xs flex items-center gap-2 transition">
-            <i class="ph ph-download"></i> CSV
-        </button>
+        <h3 class="font-bold text-lg border-b border-gray-700 pb-2 flex-1">Cluster Instances</h3>
     </div>
     
-    <div class="bg-gray-800 rounded border border-gray-700 overflow-hidden p-2">
-        <div class="overflow-x-auto">
-            <table id="cluster-instances-table" class="w-full text-left text-sm">
-                <thead class="bg-gray-700 text-xs uppercase text-gray-400">
-                    <tr>
-                        <th class="p-3">Name</th>
-                        <th class="p-3">Host Node</th>
-                        <th class="p-3">Status</th>
-                        <th class="p-3">IP Address</th>
-                        <th class="p-3">Flavor</th>
-                        <th class="p-3">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for instance in instances %}
-                    <tr class="border-b border-gray-700 last:border-0 hover:bg-gray-700 transition-colors cursor-pointer"
-                        hx-get="{% url 'instance_details' instance.uuid %}"
-                        hx-target="#main-stage"
-                        hx-push-url="true"
-                        title="Click for details">
-                        
-                        <td class="p-3 font-medium text-white flex items-center gap-2">
-                            <i class="ph ph-cube text-blue-400"></i> {{ instance.name }}
-                        </td>
-                        <td class="p-3 text-gray-400">{{ instance.host.hostname }}</td>
-                        <td class="p-3">
-                            {% if instance.status == 'ACTIVE' %}
-                                <span class="text-green-400 flex items-center gap-1"><div class="w-2 h-2 bg-green-400 rounded-full"></div> Active</span>
-                            {% else %}
-                                <span class="text-red-400 flex items-center gap-1"><div class="w-2 h-2 bg-red-400 rounded-full"></div> {{ instance.status }}</span>
-                            {% endif %}
-                        </td>
-                        <td class="p-3 text-gray-300 font-mono text-xs">{{ instance.ip_address|default:"-" }}</td>
-                        <td class="p-3 text-gray-400">{{ instance.flavor_name }}</td>
-                        <td class="p-3 flex gap-2" onclick="event.stopPropagation()">
-                            <button onclick="openConsole('{{ instance.uuid }}')" class="bg-blue-900 text-blue-200 px-2 py-1 rounded text-xs hover:bg-blue-800 border border-blue-800">Console</button>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    {% endfor %}
-                </tbody>
-            </table>
+    <div hx-get="{% url 'instance_table' %}?cluster_id={{ cluster.id }}" hx-trigger="load" hx-swap="outerHTML">
+        <div class="p-8 text-center text-gray-500">
+            <i class="ph ph-spinner animate-spin text-2xl text-blue-500"></i>
+            <span class="ml-2">Loading instances...</span>
         </div>
     </div>
 
     <script>
         (function() {
             const initTables = () => {
-                // Initialize Instances Table
-                var instancesTableEl = document.querySelector("#cluster-instances-table");
-                if (instancesTableEl && typeof simpleDatatables !== 'undefined') {
-                    if (!instancesTableEl.classList.contains('dataTable-table')) {
-                        const iTable = new simpleDatatables.DataTable(instancesTableEl, {
-                            perPage: 15,
-                            perPageSelect: [15, 50, 100, "All"],
-                            fixedHeight: false,
-                            labels: {
-                                placeholder: "Search instances...",
-                                perPage: "entries per page",
-                                noRows: "No instances found",
-                                info: "Showing {start} to {end} of {rows} entries",
-                            }
-                        });
-                        
-                        // Setup HTMX refresh hooks for instances table
-                        const refreshHtmx = () => { if (typeof htmx !== 'undefined') { htmx.process(instancesTableEl); } };
-                        iTable.on('datatable.init', refreshHtmx);
-                        iTable.on('datatable.page', refreshHtmx);
-                        iTable.on('datatable.sort', refreshHtmx);
-                        iTable.on('datatable.search', refreshHtmx);
-                        refreshHtmx();
-
-                        const exportBtn = document.getElementById('export-cluster-instances');
-                        if (exportBtn) {
-                            exportBtn.addEventListener('click', () => {
-                                iTable.export({ type: "csv", filename: "cluster_instances", download: true });
-                            });
-                        }
-                    }
-                }
-
-                // Initialize Networks Table
+                // Initialize Networks Table (Client-side)
                 var networksTableEl = document.querySelector("#cluster-networks-table");
                 if (networksTableEl && typeof simpleDatatables !== 'undefined') {
                     if (!networksTableEl.classList.contains('dataTable-table')) {

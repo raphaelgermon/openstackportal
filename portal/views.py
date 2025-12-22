@@ -9,6 +9,11 @@ from django.http import HttpResponse, JsonResponse
 from django.db.models import Sum, Count, Q, Exists, OuterRef, Prefetch
 from django.conf import settings
 from django.core.management import call_command
+from django.core.paginator import Paginator
+from django.utils.html import format_html
+from django.urls import reverse
+from django.template.loader import render_to_string
+
 from .models import Cluster, PhysicalHost, Instance, Alert, AuditLog, PortalSettings, Flavor, ServerCostProfile
 from .openstack_utils import OpenStackClient
 import random
@@ -128,28 +133,26 @@ def cluster_details(request, pk):
 
     services = cluster.services.all().order_by('binary', 'host')
     alerts = Alert.objects.filter(target_cluster=cluster, is_active=True) | Alert.objects.filter(target_host__cluster=cluster, is_active=True)
-    instances = Instance.objects.filter(host__cluster=cluster).select_related('host').order_by('name')
+    
+    # Optimization: removed heavy 'instances' list query here. 
+    # It is now loaded via HTMX in instance_table_view
     
     # NEW: Networks
     networks = cluster.networks.all().order_by('name')
-    print(f"DEBUG: Viewing Cluster ID={cluster.id} Name={cluster.name}. Found {networks.count()} networks in DB.")
 
     context = {
         'cluster': cluster,
         'node_count': hosts.count(),
-        'instance_count': instances.count(),
+        'instance_count': Instance.objects.filter(host__cluster=cluster).count(), # Keep count for the header card
         'stats': stats,       
         'aggregates': aggregates,   
         'cpu_pct': round(cpu_pct, 1),
         'mem_pct': round(mem_pct, 1),
         'services': services,
         'alerts': alerts,
-        'instances': instances,
         'networks': networks,
     }
     return render_page(request, 'portal/partials/cluster_details.html', context, 'cluster')
-
-
 
 
 def host_detail(request, pk):
@@ -353,8 +356,8 @@ def dashboard(request):
 
 @login_required
 def all_instances(request):
-    instances = Instance.objects.select_related('host__cluster').all().order_by('name')
-    return render_page(request, 'portal/partials/all_instances.html', {'instances': instances}, 'all_instances')
+    # Just render the wrapper; HTMX will load the content via instance_table_view
+    return render_page(request, 'portal/partials/all_instances.html', {}, 'all_instances')
 
 @login_required
 def all_nodes(request):
@@ -684,3 +687,73 @@ def admin_settings(request):
             except ValueError: pass
 
     return render_page(request, 'portal/partials/admin_settings.html', {'settings': portal_settings, 'clusters': clusters, 'cost_profiles': cost_profiles}, 'admin')
+
+# --- NEW HTMX DATATABLE VIEW ---
+@login_required
+def instance_table_view(request):
+    """
+    HTMX-driven server-side table view for Instances.
+    """
+    # 1. Base Query and SANITIZATION
+    cluster_id = request.GET.get('cluster_id')
+    
+    # Sanitize: If literal string "None" or non-digit (and not empty), force to None
+    if cluster_id == 'None' or (cluster_id and not cluster_id.isdigit()):
+        cluster_id = None
+
+    queryset = Instance.objects.select_related('host', 'host__cluster').all()
+    
+    if cluster_id:
+        queryset = queryset.filter(host__cluster_id=cluster_id)
+
+    # 2. Search
+    query = request.GET.get('q', '').strip()
+    if query:
+        queryset = queryset.filter(
+            Q(name__icontains=query) |
+            Q(ip_address__icontains=query) |
+            Q(status__icontains=query) |
+            Q(flavor_name__icontains=query) |
+            Q(host__hostname__icontains=query)
+        )
+
+    # 3. Sorting
+    sort_by = request.GET.get('sort', 'name')
+    sort_dir = request.GET.get('dir', 'asc')
+    
+    # Allowed sort fields to prevent SQL injection
+    allowed_sorts = {
+        'name': 'name',
+        'cluster': 'host__cluster__name',
+        'host': 'host__hostname',
+        'status': 'status',
+        'ip': 'ip_address',
+        'flavor': 'flavor_name'
+    }
+    
+    order_field = allowed_sorts.get(sort_by, 'name')
+    if sort_dir == 'desc':
+        order_field = '-' + order_field
+        
+    queryset = queryset.order_by(order_field)
+
+    # 4. Pagination
+    try:
+        per_page = int(request.GET.get('perPage', 15))
+    except ValueError:
+        per_page = 15
+        
+    page_num = request.GET.get('page', 1)
+    paginator = Paginator(queryset, per_page)
+    page_obj = paginator.get_page(page_num)
+
+    context = {
+        'instances': page_obj,
+        'query': query,
+        'sort_by': sort_by,
+        'sort_dir': sort_dir,
+        'cluster_id': cluster_id or '', # Pass empty string explicitly to avoid "None" string in templates
+        'per_page': per_page
+    }
+    
+    return render(request, 'portal/partials/instance_table.html', context)

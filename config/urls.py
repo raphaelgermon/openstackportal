@@ -26,6 +26,9 @@ urlpatterns = [
     path('portal/all-flavors/', views.all_flavors, name='all_flavors'), 
     path('portal/refresh-flavors/', views.refresh_flavors, name='refresh_flavors'), 
 
+    path('portal/partials/instance-table/', views.instance_table_view, name='instance_table'),
+    path('portal/export/instances/', views.export_instances_csv, name='export_instances_csv'),
+
     # Portal Views
     path('', views.dashboard, name='dashboard'),
     path('about/', views.about, name='about'), 

@@ -7,95 +7,16 @@
             <p class="text-gray-400 text-sm mt-1">Complete list of all virtual machines across all clusters.</p>
         </div>
         <div class="flex gap-2 items-center">
-            <button id="export-instances" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded border border-gray-600 text-sm flex items-center gap-2 transition">
-                <i class="ph ph-download"></i> CSV
-            </button>
-            <div class="bg-gray-800 px-4 py-2 rounded border border-gray-700 text-sm">
-                <span class="text-gray-400">Total Count:</span> 
-                <span class="text-white font-bold ml-1">{{ instances.count }}</span>
-            </div>
+            <a href="{% url 'export_instances_csv' %}" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded border border-gray-600 text-sm flex items-center gap-2 transition">
+                <i class="ph ph-download"></i> CSV Export
+            </a>
         </div>
     </div>
 
-    <div class="bg-gray-800 rounded border border-gray-700 overflow-hidden p-2">
-        <div class="overflow-x-auto">
-            <table id="all-instances-table" class="w-full text-left text-sm">
-                <thead class="bg-gray-700 text-xs uppercase text-gray-400">
-                    <tr>
-                        <th class="p-3">Name</th>
-                        <th class="p-3">Cluster</th>
-                        <th class="p-3">Host Node</th>
-                        <th class="p-3">Status</th>
-                        <th class="p-3">IP Address</th>
-                        <th class="p-3">Flavor</th>
-                        <th class="p-3">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for instance in instances %}
-                    <tr class="border-b border-gray-700 last:border-0 hover:bg-gray-750 transition-colors cursor-pointer"
-                        hx-get="{% url 'instance_details' instance.uuid %}"
-                        hx-target="#main-stage"
-                        hx-push-url="true"
-                        title="Click for details">
-                        
-                        <td class="p-3 font-medium text-white flex items-center gap-2">
-                            <i class="ph ph-cube text-blue-400"></i> {{ instance.name }}
-                        </td>
-                        <td class="p-3 text-blue-300">{{ instance.host.cluster.name }}</td>
-                        <td class="p-3 text-gray-400">{{ instance.host.hostname }}</td>
-                        <td class="p-3">
-                            {% if instance.status == 'ACTIVE' %}
-                                <span class="text-green-400 flex items-center gap-1"><div class="w-2 h-2 bg-green-400 rounded-full"></div> Active</span>
-                            {% else %}
-                                <span class="text-red-400 flex items-center gap-1"><div class="w-2 h-2 bg-red-400 rounded-full"></div> {{ instance.status }}</span>
-                            {% endif %}
-                        </td>
-                        <td class="p-3 text-gray-300 font-mono text-xs">{{ instance.ip_address|default:"-" }}</td>
-                        <td class="p-3 text-gray-400">{{ instance.flavor_name }}</td>
-                        <td class="p-3 flex gap-2" onclick="event.stopPropagation()">
-                            <button onclick="openConsole('{{ instance.uuid }}')" class="bg-blue-900 text-blue-200 px-2 py-1 rounded text-xs hover:bg-blue-800 border border-blue-800">Console</button>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    {% endfor %}
-                </tbody>
-            </table>
+    <div hx-get="{% url 'instance_table' %}" hx-trigger="load" hx-swap="outerHTML">
+        <div class="p-12 text-center text-gray-500">
+            <i class="ph ph-spinner animate-spin text-3xl text-blue-500 mb-2"></i>
+            <p>Loading inventory data...</p>
         </div>
     </div>
-
-    <script>
-        (function() {
-            const initTable = () => {
-                var tableElement = document.querySelector("#all-instances-table");
-                if (tableElement && typeof simpleDatatables !== 'undefined') {
-                    if (!tableElement.classList.contains('dataTable-table')) {
-                        const instTable = new simpleDatatables.DataTable(tableElement, {
-                            perPage: 15, perPageSelect: [15, 50, 100, "All"]
-                        });
-                        
-                        const exportBtn = document.getElementById('export-instances');
-                        if (exportBtn) {
-                            const newBtn = exportBtn.cloneNode(true);
-                            exportBtn.parentNode.replaceChild(newBtn, exportBtn);
-                            newBtn.addEventListener('click', () => {
-                                instTable.export({ type: "csv", filename: "all_instances", download: true });
-                            });
-                        }
-                    }
-                }
-            };
-            
-            // Check for v3.2.0 specific method to be sure
-            if (typeof simpleDatatables === 'undefined' || !simpleDatatables.DataTable.prototype.export) {
-                // If loaded version is wrong or missing, force load v3.2.0
-                const script = document.createElement('script');
-                script.src = "https://cdn.jsdelivr.net/npm/simple-datatables@3.2.0/dist/umd/simple-datatables.js";
-                script.onload = initTable;
-                document.head.appendChild(script);
-            } else {
-                initTable();
-            }
-        })();
-    </script>
 </div>
