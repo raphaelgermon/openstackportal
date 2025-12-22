@@ -6,10 +6,7 @@
             </h1>
             <p class="text-gray-400 text-sm mt-1">Overview of all registered OpenStack environments</p>
         </div>
-        <button class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-sm transition-colors flex items-center gap-2 shadow-sm">
-            <i class="ph ph-plus-circle"></i> Add Cluster
-        </button>
-    </div>
+        </div>
 
     <div class="bg-gray-800 border border-gray-700 rounded-lg shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
@@ -22,12 +19,12 @@
                         <th class="py-3 px-6 font-medium">Mgmt Network</th>
                         <th class="py-3 px-6 font-medium">Storage Network</th>
                         <th class="py-3 px-6 text-center font-medium">Bond</th>
-                        <th class="py-3 px-6 text-center font-medium">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="text-gray-300 text-sm divide-y divide-gray-700">
                     {% for cluster in clusters %}
-                    <tr class="hover:bg-gray-700/30 transition-colors">
+                    <tr class="hover:bg-gray-700/30 transition-colors cursor-pointer"
+                        onclick="htmx.ajax('GET', '{% url 'cluster_details' cluster.pk %}', {target:'#main-stage', pushUrl:true})">
                         <td class="py-4 px-6 whitespace-nowrap">
                             <div class="flex items-center gap-3">
                                 <div class="bg-gray-700 p-2 rounded text-blue-400"><i class="ph ph-globe text-xl"></i></div>
@@ -81,21 +78,10 @@
                                 <span class="text-gray-600">-</span>
                             {% endif %}
                         </td>
-                        <td class="py-4 px-6 text-center">
-                            <div class="flex item-center justify-center gap-2">
-                                <button class="p-1.5 rounded hover:bg-blue-600/20 text-blue-400 hover:text-blue-300 transition-colors" title="View Details"
-                                        hx-get="{% url 'cluster_details' cluster.pk %}" hx-target="#main-stage" hx-push-url="true">
-                                    <i class="ph ph-eye text-lg"></i>
-                                </button>
-                                <button class="p-1.5 rounded hover:bg-purple-600/20 text-purple-400 hover:text-purple-300 transition-colors" title="Edit Config">
-                                    <i class="ph ph-pencil-simple text-lg"></i>
-                                </button>
-                            </div>
-                        </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="py-8 text-center text-gray-500">
+                        <td colspan="6" class="py-8 text-center text-gray-500">
                             No clusters found.
                         </td>
                     </tr>
@@ -106,7 +92,7 @@
     </div>
     <script>
         // Initialize DataTable if rows exist
-        if (document.querySelector("#clusters-table tbody tr td").colSpan !== 7) {
+        if (document.querySelector("#clusters-table tbody tr td").colSpan !== 6) {
             new simpleDatatables.DataTable("#clusters-table", {
                 searchable: true,
                 fixedHeight: false,

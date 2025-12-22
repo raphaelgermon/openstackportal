@@ -90,7 +90,7 @@ def cluster_list(request):
     context = {
         'clusters': clusters
     }
-    return render(request, 'portal/partials/all_clusters.html', context)
+    return render_page(request, 'portal/partials/all_clusters.html', context, 'cluster_list')
 
 @login_required
 def cluster_details(request, pk):
