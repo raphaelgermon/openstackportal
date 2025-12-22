@@ -1,5 +1,4 @@
 <div class="animate-fade-in-up">
-    <!-- Header -->
     <div class="flex justify-between items-start mb-6">
         <div>
             <h1 class="text-2xl font-bold text-white flex items-center gap-2">
@@ -14,22 +13,23 @@
                 <i class="ph ph-arrows-clockwise"></i> Refresh
             </button>
 
-            {% if host.is_maintenance %}
-                <button hx-post="{% url 'toggle_maintenance' host.id %}" 
-                        hx-target="#main-stage"
-                        class="bg-red-600 hover:bg-red-500 px-4 py-2 rounded text-sm font-medium transition text-white">
-                    <i class="ph ph-lock-key"></i> Exit Maintenance
-                </button>
-            {% else %}
-                <button onclick="openMaintModal()" 
-                        class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-sm font-medium transition text-white">
-                    <i class="ph ph-wrench"></i> Enter Maintenance
-                </button>
+            {% if user.is_superuser %}
+                {% if host.is_maintenance %}
+                    <button hx-post="{% url 'toggle_maintenance' host.id %}" 
+                            hx-target="#main-stage"
+                            class="bg-red-600 hover:bg-red-500 px-4 py-2 rounded text-sm font-medium transition text-white">
+                        <i class="ph ph-lock-key"></i> Exit Maintenance
+                    </button>
+                {% else %}
+                    <button onclick="openMaintModal()" 
+                            class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-sm font-medium transition text-white">
+                        <i class="ph ph-wrench"></i> Enter Maintenance
+                    </button>
+                {% endif %}
             {% endif %}
         </div>
     </div>
 
-    <!-- Alerts Section (Only visible if alerts exist) -->
     {% if alerts %}
     <div class="mb-6 bg-red-900/20 border border-red-800 rounded-lg p-4">
         <h3 class="text-red-400 font-bold flex items-center gap-2 mb-2">
@@ -47,7 +47,7 @@
     </div>
     {% endif %}
 
-    <!-- Maintenance Modal (Hidden) -->
+    {% if user.is_superuser %}
     <div id="maintenance-modal" class="hidden fixed inset-0 z-[100] bg-black/70 flex items-center justify-center backdrop-blur-sm">
         <div class="bg-gray-800 border border-gray-600 rounded-lg shadow-2xl w-[400px] p-6 transform transition-all scale-100">
             <h3 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
@@ -66,8 +66,8 @@
             </form>
         </div>
     </div>
+    {% endif %}
 
-    <!-- Hardware Information (New) -->
     <div class="bg-gray-800 border border-gray-700 rounded-lg p-5 mb-6">
         <h3 class="text-lg font-semibold text-white mb-4 border-b border-gray-700 pb-2">Hardware Information</h3>
         <div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
@@ -104,7 +104,6 @@
         </div>
     </div>
 
-    <!-- Capacity Bars -->
     <div class="grid grid-cols-2 gap-6 mb-8">
         <div class="bg-gray-800 p-4 rounded border border-gray-700">
             <div class="flex justify-between mb-2">
@@ -126,7 +125,6 @@
         </div>
     </div>
 
-    <!-- Instance List (Existing) -->
     <h3 class="font-bold text-lg mb-4 border-b border-gray-700 pb-2">Running Instances</h3>
     <div class="bg-gray-800 rounded border border-gray-700">
         <table class="w-full text-left text-sm">
