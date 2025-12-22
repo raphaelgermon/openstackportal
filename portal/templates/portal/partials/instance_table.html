@@ -33,43 +33,40 @@
                 <table class="w-full text-left text-sm">
                     <thead class="bg-gray-700 text-xs uppercase text-gray-400">
                         <tr>
-                            {% with base_url="?q="|add:query|add:"&cluster_id="|add:cluster_id|default:""|add:"&perPage="|add:per_page %}
-                            
                             <th class="p-3 cursor-pointer hover:text-white" 
-                                hx-get="{% url 'instance_table' %}{{ base_url }}&sort=name&dir={% if sort_by == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" 
+                                hx-get="{% url 'instance_table' %}?q={{ query|urlencode }}&cluster_id={{ cluster_id|default:'' }}&perPage={{ per_page }}&sort=name&dir={% if sort_by == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" 
                                 hx-target="#instance-list-content" hx-select="#instance-list-content">
-                                Name {% if sort_by == 'name' %}<i class="ph ph-caret-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}"></i>{% endif %}
+                                Name {% if sort_by == 'name' %}<i class="ph ph-caret-{% if sort_dir == 'asc' %}up{% else %}down{% endif %} ml-1"></i>{% endif %}
                             </th>
                             
                             {% if not cluster_id %}
                             <th class="p-3 cursor-pointer hover:text-white" 
-                                hx-get="{% url 'instance_table' %}{{ base_url }}&sort=cluster&dir={% if sort_by == 'cluster' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" 
+                                hx-get="{% url 'instance_table' %}?q={{ query|urlencode }}&cluster_id={{ cluster_id|default:'' }}&perPage={{ per_page }}&sort=cluster&dir={% if sort_by == 'cluster' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" 
                                 hx-target="#instance-list-content" hx-select="#instance-list-content">
-                                Cluster {% if sort_by == 'cluster' %}<i class="ph ph-caret-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}"></i>{% endif %}
+                                Cluster {% if sort_by == 'cluster' %}<i class="ph ph-caret-{% if sort_dir == 'asc' %}up{% else %}down{% endif %} ml-1"></i>{% endif %}
                             </th>
                             {% endif %}
 
                             <th class="p-3 cursor-pointer hover:text-white" 
-                                hx-get="{% url 'instance_table' %}{{ base_url }}&sort=host&dir={% if sort_by == 'host' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" 
+                                hx-get="{% url 'instance_table' %}?q={{ query|urlencode }}&cluster_id={{ cluster_id|default:'' }}&perPage={{ per_page }}&sort=host&dir={% if sort_by == 'host' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" 
                                 hx-target="#instance-list-content" hx-select="#instance-list-content">
-                                Host {% if sort_by == 'host' %}<i class="ph ph-caret-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}"></i>{% endif %}
+                                Host {% if sort_by == 'host' %}<i class="ph ph-caret-{% if sort_dir == 'asc' %}up{% else %}down{% endif %} ml-1"></i>{% endif %}
                             </th>
                             
                             <th class="p-3 cursor-pointer hover:text-white" 
-                                hx-get="{% url 'instance_table' %}{{ base_url }}&sort=status&dir={% if sort_by == 'status' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" 
+                                hx-get="{% url 'instance_table' %}?q={{ query|urlencode }}&cluster_id={{ cluster_id|default:'' }}&perPage={{ per_page }}&sort=status&dir={% if sort_by == 'status' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" 
                                 hx-target="#instance-list-content" hx-select="#instance-list-content">
-                                Status {% if sort_by == 'status' %}<i class="ph ph-caret-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}"></i>{% endif %}
+                                Status {% if sort_by == 'status' %}<i class="ph ph-caret-{% if sort_dir == 'asc' %}up{% else %}down{% endif %} ml-1"></i>{% endif %}
                             </th>
 
                             <th class="p-3 cursor-pointer hover:text-white" 
-                                hx-get="{% url 'instance_table' %}{{ base_url }}&sort=ip&dir={% if sort_by == 'ip' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" 
+                                hx-get="{% url 'instance_table' %}?q={{ query|urlencode }}&cluster_id={{ cluster_id|default:'' }}&perPage={{ per_page }}&sort=ip&dir={% if sort_by == 'ip' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" 
                                 hx-target="#instance-list-content" hx-select="#instance-list-content">
-                                IP Address {% if sort_by == 'ip' %}<i class="ph ph-caret-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}"></i>{% endif %}
+                                IP Address {% if sort_by == 'ip' %}<i class="ph ph-caret-{% if sort_dir == 'asc' %}up{% else %}down{% endif %} ml-1"></i>{% endif %}
                             </th>
                             
                             <th class="p-3">Flavor</th>
                             <th class="p-3">Actions</th>
-                            {% endwith %}
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-700">
@@ -99,7 +96,7 @@
                             <td class="p-3 text-gray-400 text-xs">{{ instance.flavor_name }}</td>
                             
                             <td class="p-3" onclick="event.stopPropagation()">
-                                <button onclick="openConsole('{{ instance.uuid }}')" class="bg-blue-900/50 hover:bg-blue-800 border border-blue-800 text-blue-200 px-2 py-1 rounded text-xs transition">
+                                <button onclick="openConsole('{{ instance.uuid }}', 'novnc')" class="bg-blue-900/50 hover:bg-blue-800 border border-blue-800 text-blue-200 px-2 py-1 rounded text-xs transition">
                                     Console
                                 </button>
                             </td>
@@ -121,7 +118,7 @@
                 <div class="text-gray-400">Showing {{ instances.start_index }}-{{ instances.end_index }} of {{ instances.paginator.count }}</div>
                 <div class="flex gap-1">
                     {% if instances.has_previous %}
-                    <button hx-get="{% url 'instance_table' %}?page={{ instances.previous_page_number }}&q={{ query }}&sort={{ sort_by }}&dir={{ sort_dir }}&cluster_id={{ cluster_id|default:'' }}&perPage={{ per_page }}"
+                    <button hx-get="{% url 'instance_table' %}?page={{ instances.previous_page_number }}&q={{ query|urlencode }}&sort={{ sort_by }}&dir={{ sort_dir }}&cluster_id={{ cluster_id|default:'' }}&perPage={{ per_page }}"
                             hx-target="#instance-list-content" hx-select="#instance-list-content"
                             class="px-3 py-1 bg-gray-800 border border-gray-600 rounded text-gray-300 hover:text-white transition">Prev</button>
                     {% endif %}
@@ -129,7 +126,7 @@
                     <span class="px-3 py-1 text-gray-500">Page {{ instances.number }} of {{ instances.paginator.num_pages }}</span>
 
                     {% if instances.has_next %}
-                    <button hx-get="{% url 'instance_table' %}?page={{ instances.next_page_number }}&q={{ query }}&sort={{ sort_by }}&dir={{ sort_dir }}&cluster_id={{ cluster_id|default:'' }}&perPage={{ per_page }}"
+                    <button hx-get="{% url 'instance_table' %}?page={{ instances.next_page_number }}&q={{ query|urlencode }}&sort={{ sort_by }}&dir={{ sort_dir }}&cluster_id={{ cluster_id|default:'' }}&perPage={{ per_page }}"
                             hx-target="#instance-list-content" hx-select="#instance-list-content"
                             class="px-3 py-1 bg-gray-800 border border-gray-600 rounded text-gray-300 hover:text-white transition">Next</button>
                     {% endif %}
@@ -138,4 +135,4 @@
             {% endif %}
         </div>
     </div>
-</div>  
+</div>
